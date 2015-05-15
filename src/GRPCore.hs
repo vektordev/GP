@@ -39,6 +39,14 @@ data Settings = Settings {
   poolMax :: Int
 }
 
+deep :: IO()
+deep = do
+  let params = Settings "./GRPSeed.hs" "./result" 50 5 30
+  ag <- initializeSeed $ initialAgent params
+  let iPool = (initialPool ag (poolMin params) (poolMax params)) :: Pool
+  compiledPool <- evaluateFitness iPool
+  iteratePool (generations params) compiledPool (resultpath params)
+
 test :: IO()
 test = do
   let params = Settings "./GRPSeed.hs" "./result" 1 5 30
@@ -98,20 +106,20 @@ filterMaybe a = map fromJust $ filter isJust a
 refillPool :: Pool -> IO Pool
 refillPool (Pool max f id agents) = do
   let parents = take (max - length agents) $ concat $ repeat $ reverse $ sort agents
-  children <- sequence (map (\(p, id) -> createChild p id) $ zip parents [id..])--TODO2: This is kinda risky, as I am not entirely confident I won't end up with duplicate IDs.
+  children <- sequence (map (\(p, id) -> createChild p p id) $ zip parents [id..])--TODO2: This is kinda risky, as I am not entirely confident I won't end up with duplicate IDs.
   putStrLn ("Children: " ++ ( show (filterMaybe children)))
   return $ Pool max f (id + length (filterMaybe children)) ((filterMaybe children) ++ agents)
 --Very basic approach: each leftover parent generates children, starting with the best, until all slots are filled.
 --More sophisticated methods with certain biases for genetic diversity and better fitness values need to be tested.
 
-createChild :: AgentStats -> Int -> IO (Maybe AgentStats)
+createChild :: AgentStats -> AgentStats-> Int -> IO (Maybe AgentStats)
 --Assumption: Has already been compiled.
 --TODO1:
-createChild ag@(AgentStats path fit ancestry generation state) id = do
+createChild codeAg@(AgentStats path fit ancestry generation state) (AgentStats src _ _ _ _) id = do
   putStrLn "creating a child"
   let destname = "GRPGenome" ++ show id ++ ".hs"
   --call Evolve - write resulting source code and stats file.
-  (code, out, err) <- readProcessWithExitCode ((reverse $ drop 3 $ reverse path) ++ "hl") ["-e", path, destname] ""
+  (code, out, err) <- readProcessWithExitCode ((reverse $ drop 3 $ reverse path) ++ "hl") ["-e", src, destname] ""
   if (code == ExitSuccess)
   then do
     generate destname --generate Headless file
@@ -139,6 +147,10 @@ evaluateFitness (Pool max min id agents) = do
   ags <- sequence $ map (evalGenome) agents
   return (Pool max min id ags)--TODO1: Use  Control.Concurrent.ParallelIO.Global.parallel instead of sequence here?
 
+--As per the above TODO mark, how about AgentStats -> IO (AgentStats, MoreData)
+--Where MoreData must carry: Is the Genome compilable? If so, did it terminate?
+--If so, how good does it perform? Basically, if this genome has never been evaluated before, a fitness value is needed and will be used when dealing with the parent.
+evalGenome :: AgentStats -> IO AgentStats
 evalGenome ag@(AgentStats path fit ancestry generation state) = do
   printFit ("evaluating a genome " ++ path)
   let statfile = path ++ ".stat"
