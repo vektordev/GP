@@ -21,7 +21,7 @@ type Fitness = (Level, Float)
 --this representation might be a bit harder to visualize overall than a single continuous value. However, it is much easier than to fit a error count without an upper bound into a fixed interval.
 
 fitOut :: String -> IO()
-fitOut str = return ()
+fitOut str = return ()--putStrLn str
 
 trace str x = x --temporarily mute the trace calls
 
@@ -37,11 +37,14 @@ computeFitness source path = do
     (code, out, err) <- readProcessWithExitCode "ghc" [path] []
     fitOut "Compiler output: "
     fitOut out
+    fitOut err
     if code == ExitSuccess
     then return $ trace "compilation achieved" ((Compilation, -1.0 * (2^126)), []) -- fitness: compilation achieved, but no further details known
       --TODO: Compute base fitness here: Code length, Hlint, runtime of mutate, performance of mutate (call and use shallow eval)
       --This function will not implement performance in a specific problem domain.
-    else return $ trace "no compilation" compileErrorFitness out err -- fitness and feedback on failed compilation
+    else do
+      putStrLn ("no compilation " ++ (show $ length err))
+      return $ compileErrorFitness out err -- fitness and feedback on failed compilation
 
 --TODO 2: query multiple times with different input data; get median.
 computeProblemFitness :: ([StdGen] -> State -> Input -> (Output, State)) -> State -> IO (Float, State)

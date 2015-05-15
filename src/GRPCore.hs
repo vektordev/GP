@@ -25,10 +25,10 @@ import Debug.Trace
 --single-agent tasks are static fitness benchmarks for agents
 
 data Pool = Pool {
-	maxSize :: Int,
-	filteredSize :: Int,
-	nextID :: Int,
-	agents :: [AgentStats]
+  maxSize :: Int,
+  filteredSize :: Int,
+  nextID :: Int,
+  agents :: [AgentStats]
 } deriving (Show, Read)
 
 data Settings = Settings {
@@ -38,6 +38,14 @@ data Settings = Settings {
   poolMin :: Int,
   poolMax :: Int
 }
+
+test :: IO()
+test = do
+  let params = Settings "./GRPSeed.hs" "./result" 1 5 30
+  ag <- initializeSeed $ initialAgent params
+  let iPool = (initialPool ag (poolMin params) (poolMax params)) :: Pool
+  compiledPool <- evaluateFitness iPool
+  iteratePool (generations params) compiledPool (resultpath params)
 
 main :: IO()
 main = do
@@ -68,15 +76,15 @@ initialPool ags min max = Pool max min 1 [ags]
 
 initializeSeed :: FilePath -> IO AgentStats
 initializeSeed path = do
-	--Copy source file
-	src <- readFile path
-	writeFile "./GRPGenome0.hs" ("{-# LANGUAGE Safe #-}\nmodule GRPGenome0\n" ++ (unlines $ drop 2 $ lines src))
-	--Use generator to generate a valid headless file for the source file
-	generate "./GRPGenome0.hs"
-	--create a stats file for the base genome.
-	let ag = AgentStats "./GRPGenome0.hs" (Unchecked, 0.0) [] 1 []
-	writeFile "./GRPGenome0.hs.stat" $ show ag
-	return ag
+  --Copy source file
+  src <- readFile path
+  writeFile "./GRPGenome0.hs" ("{-# LANGUAGE Safe #-}\nmodule GRPGenome0\n" ++ (unlines $ drop 2 $ lines src))
+  --Use generator to generate a valid headless file for the source file
+  generate "./GRPGenome0.hs"
+  --create a stats file for the base genome.
+  let ag = AgentStats "./GRPGenome0.hs" (Unchecked, 0.0) [] 1 []
+  writeFile "./GRPGenome0.hs.stat" $ show ag
+  return ag
 
 showPool (Pool _ _ _ ags) = do
   putStrLn "\n\n\n"
@@ -117,36 +125,40 @@ createChild ag@(AgentStats path fit ancestry generation state) id = do
     return Nothing
 
 printEv :: String -> IO()
-printEv str = putStrLn str
+printEv str = return () --putStrLn str
 
 --sequence operation for every agent: cast fitness on it - if returned agent is at least compilation-fit. This will compile the executable.
 --Then call the executable to eval the problem-specific fitness, assuming compilation was achieved.
 --Map the off-the-shelf fitness function. This will compile the genome. Then, call the headless executable to generate the problem-specific fitness value.
+--TODO:
+--    This function probably needs to implement functionality to cast back the fitness of a genome to it's parent. Thus, parents producing non-compiling offspring are less likely to reproduce.
+--    This regulation needs to respect the overall probability of generating a good genome, so both the quota of compilation and the fitness values of offspring need to be considered.
+--    There needs to be a clearly defined way in which a genome's fitness influences it's ancestry that doesn't involve infinite loopback.
 evaluateFitness :: Pool -> IO Pool
-evaluateFitness (Pool max min id agents) = 
-	let evalGenome ag@(AgentStats path fit ancestry generation state) = do
-		printFit ("evaluating a genome " ++ path)
-		let statfile = path ++ ".stat"
-		src <- readFile path
-		(fitNew, errors) <- computeFitness src ((reverse $ drop 3 $ reverse path) ++ "hl.hs")
-		writeFile statfile $show $AgentStats path fitNew ancestry generation state
-		if fitNew >= (Compilation, -1.0 * (2^127))
-		then do--process call to headless: Evaluate!
-			putStrLn ("ok " ++ path)
-			let executable = (reverse $ drop 3 $ reverse path) ++ "hl"
-			(code, out, err) <- readProcessWithExitCode executable ["-f", path] "" --blocking execution
-			if code /= ExitSuccess then putStrLn ("A genome failed to execute fitness properly\n" ++ err) else return ()
-			newDump <- readFile statfile
-			return $ read newDump
-		else do
-			printFit ("fuckup " ++ path)
-			return $ AgentStats path fitNew ancestry generation state
-	in do
-	ags <- sequence $ map (evalGenome) agents
-	return (Pool max min id ags)--TODO1: Use  Control.Concurrent.ParallelIO.Global.parallel instead of sequence here?
+evaluateFitness (Pool max min id agents) = do
+  ags <- sequence $ map (evalGenome) agents
+  return (Pool max min id ags)--TODO1: Use  Control.Concurrent.ParallelIO.Global.parallel instead of sequence here?
+
+evalGenome ag@(AgentStats path fit ancestry generation state) = do
+  printFit ("evaluating a genome " ++ path)
+  let statfile = path ++ ".stat"
+  src <- readFile path
+  (fitNew, errors) <- computeFitness src ((reverse $ drop 3 $ reverse path) ++ "hl.hs")
+  writeFile statfile $show $AgentStats path fitNew ancestry generation state
+  if fitNew >= (Compilation, -1.0 * (2^127))
+  then do--process call to headless: Evaluate!
+    putStrLn ("ok " ++ path)
+    let executable = (reverse $ drop 3 $ reverse path) ++ "hl"
+    (code, out, err) <- readProcessWithExitCode executable ["-f", path] "" --blocking execution
+    if code /= ExitSuccess then putStrLn ("A genome failed to execute fitness properly\n" ++ err) else return ()
+    newDump <- readFile statfile
+    return $ read newDump
+  else do
+    printFit ("fuckup " ++ path)
+    return $ AgentStats path fitNew ancestry generation state
 
 printFit :: String -> IO()
-printFit str = return ()
+printFit str = return () --putStrLn str
 
 --TODO: removeDuplicates :: Pool -> IO Pool
 

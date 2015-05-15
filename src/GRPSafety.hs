@@ -31,7 +31,7 @@ isSafe source = do
   let
     saneSafeLines = isJust $ getSafeLines source
     containsBadWords =  any (\badWord -> badWord `isInfixOf` (fromJust $ dropSafetyPrefix source)) prohibited --drop the safety prefix here
-    hasBadChars = trace (show $ filter (\char -> not $ elem char ('\r':'\t':'\n':[' '..'~'])) source) not $ null $ filter (\char -> not $ elem char ('\r':'\t':'\n':[' '..'~'])) source
+    hasBadChars = not $ null $ filter (\char -> not $ elem char ('\r':'\t':'\n':[' '..'~'])) source
   if not saneSafeLines
   then (False, "Safety: Please check safeLines limit of source code")
   else if containsBadWords
