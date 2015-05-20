@@ -44,6 +44,7 @@ computeFitness source path = do
       --This function will not implement performance in a specific problem domain.
     else do
       putStrLn ("no compilation " ++ (show $ length err))
+      putStrLn err
       return $ compileErrorFitness out err -- fitness and feedback on failed compilation
 
 --TODO 2: query multiple times with different input data; get median.

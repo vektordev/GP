@@ -35,7 +35,8 @@ main = do
     let oldStats = read file :: AgentStats
     (newFit, newState) <- computeProblemFitness Genome.act (state oldStats)
     putStrLn ("newFit = " ++ show newFit)
-    writeFile (statFile ++ "~") $show $ AgentStats (source oldStats) (Compilation, newFit) (ancestry oldStats) (generation oldStats) newState
+    let newStats = AgentStats (source oldStats) (Compilation, newFit) (ancestry oldStats) (generation oldStats) newState False :: AgentStats
+    writeFile (statFile ++ "~") $show newStats --Always false, since we're recomputing, we might as well.
     renameFile (statFile ++ "~") statFile
     --TODO2: verify correct copying
 
@@ -48,6 +49,7 @@ evolve parentStatFile srcFile newFileName = do
   src <- readFile srcFile --drop safetyprefix
   rng <- newStdGen
   let (newCode, newState) = reprogram [rng] (state pStat) [fromJust $ dropSafetyPrefix src] 
-  writeFile newFileName ("{-# LANGUAGE Safe #-}\nmodule " ++ (reverse $ drop 3 $ reverse newFileName) ++ "\n" ++ (unlines $ drop 2 $ lines $ fromJust $ getSafetyPrefix src) ++ newCode) --append safetyprefix
-  writeFile (newFileName ++ ".stat") $ show $ AgentStats ("./" ++ newFileName) (Unchecked, 0.0) (createAncestry pStat) (1+ generation pStat) []
+  writeFile newFileName ("{-# LANGUAGE Safe #-}\nmodule " ++ (reverse $ drop 3 $ reverse newFileName) ++ "\n" ++ (unlines $ drop 2 $ lines $ fromJust $ getSafetyPrefix src) ++ newCode)
+  let stats = AgentStats ("./" ++ newFileName) (Unchecked, 0.0) (createAncestry pStat) (1+ generation pStat) [] False :: AgentStats
+  writeFile (newFileName ++ ".stat") $ show stats
   putStrLn "ev terminated"
