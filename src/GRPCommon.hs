@@ -58,7 +58,7 @@ fst4 (a,b,c,d) = a
 snd4 (a,b,c,d) = b
 third4 (a,b,c,d) = c
 fourth4 (a,b,c,d) = d
---end 
+--end
 
 
 --TODO: Only allow printable chars here? \t, \n, ' ', symbols, digits and characters?

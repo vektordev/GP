@@ -85,6 +85,10 @@ iteratePool n pool dump = do
 initialPool :: AgentStats -> Int -> Int -> Pool
 initialPool ags min max = Pool max min 1 [ags]
 
+--transforms from human-readable format to gobbledygook
+--removes intra-function newlines double newlines; then removes all the double spaces.
+--transformCode :: String -> String
+--transformCode readable = foldl () readable
 
 initializeSeed :: FilePath -> IO AgentStats
 initializeSeed path = do
@@ -94,13 +98,13 @@ initializeSeed path = do
   --Use generator to generate a valid headless file for the source file
   generate "./GRPGenome0.hs"
   --create a stats file for the base genome.
-  let ag = AgentStats "./GRPGenome0.hs" (Unchecked, 0.0) [] 1 [] True -- Using True, because this one doesn't have a parent, so no need to.
+  let ag = AgentStats "./GRPGenome0.hs" (Unchecked, 0.0) [] 1 [] True 0 0 -- Using True, because this one doesn't have a parent, so no need to.
   writeFile "./GRPGenome0.hs.stat" $ show ag
   return ag
 
 showPool (Pool _ _ _ ags) = do
   putStrLn "\n\n\n"
-  _ <- sequence $  map (\(AgentStats path fitness _ gen _ _) -> putStrLn ( path ++ "; fitness: " ++ (show fitness) ++ " from generation " ++ (show gen)) ) ags
+  _ <- sequence $  map (\(AgentStats path fitness _ gen _ _ _ _) -> putStrLn ( path ++ "; fitness: " ++ (show fitness) ++ " from generation " ++ (show gen)) ) ags
   putStrLn "\n\n\n"
   return ()
 
@@ -120,7 +124,7 @@ refillPool (Pool max f id agents) = do
 createChild :: AgentStats -> AgentStats-> Int -> IO (Maybe AgentStats)
 --Assumption: Has already been compiled.
 --TODO1:
-createChild codeAg@(AgentStats path fit ancestry generation state _) (AgentStats src _ _ _ _ _) id = do
+createChild codeAg@(AgentStats path fit ancestry generation state _ _ _) (AgentStats src _ _ _ _ _ _ _) id = do
   let destname = "GRPGenome" ++ show id ++ ".hs"
   let executable = (reverse $ drop 3 $ reverse path) ++ "hl"
   --call Evolve - write resulting source code and stats file.
@@ -151,19 +155,19 @@ printEv str = return () --putStrLn str
 evaluateFitness :: Pool -> IO Pool
 evaluateFitness (Pool max min id agents) = do
   ags <- parallel $ map (evalGenome) agents
-  return (Pool max min id ags)--TODO1: Use  Control.Concurrent.ParallelIO.Global.parallel instead of sequence here?
+  return (Pool max min id ags)
 
 --As per the above TODO mark, how about AgentStats -> IO (AgentStats, MoreData)
 --Where MoreData must carry: Is the Genome compilable? If so, did it terminate?
 --If so, how good does it perform? Basically, if this genome has never been evaluated before, a fitness value is needed and will be used when dealing with the parent.
 --TODO: Needs to return quickly if the genome has been eval'd before.
 evalGenome :: AgentStats -> IO AgentStats
-evalGenome ag@(AgentStats path fit ancestry generation state fitToParent) = do
+evalGenome ag@(AgentStats path fit ancestry generation state fitToParent eval comp) = do
   printFit ("evaluating a genome " ++ path)
   let statfile = path ++ ".stat"
   src <- readFile path
   (fitNew, errors) <- computeFitness src ((reverse $ drop 3 $ reverse path) ++ "hl.hs")
-  writeFile statfile $show $AgentStats path fitNew ancestry generation state fitToParent
+  writeFile statfile $show $AgentStats path fitNew ancestry generation state fitToParent eval comp
   if fitNew >= (Compilation, -1.0 * (2^127))
   then do--process call to headless: Evaluate!
     putStrLn ("ok " ++ path)
@@ -174,8 +178,8 @@ evalGenome ag@(AgentStats path fit ancestry generation state fitToParent) = do
     newDump <- readFile statfile
     return $ read newDump
   else do
-    printFit ("fuckup " ++ path)
-    return $ AgentStats path fitNew ancestry generation state fitToParent
+    printFit ("This genome failed to compile " ++ path)
+    return $ AgentStats path fitNew ancestry generation state fitToParent eval comp
 
 printFit :: String -> IO()
 printFit str = return () --putStrLn str
