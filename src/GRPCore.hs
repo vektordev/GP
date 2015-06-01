@@ -60,7 +60,7 @@ test = do
 
 main :: IO()
 main = do
-  let params = Settings "./GRPSeed.hs" "./result" 3 60 600
+  let params = Settings "./GRPSeed.hs" "./result" 5 60 600
   ag <- initializeSeed $ initialAgent params
   let iPool = (initialPool ag (poolMin params) (poolMax params)) :: Pool
   compiledPool <- evaluateFitness iPool
@@ -104,7 +104,8 @@ initializeSeed path = do
 
 showPool (Pool _ _ _ ags) = do
   putStrLn "\n\n\n"
-  _ <- sequence $  map (\(AgentStats path fitness _ gen _ _ _ _) -> putStrLn ( path ++ "; fitness: " ++ (show fitness) ++ " from generation " ++ (show gen)) ) ags
+  _ <- sequence $ map (\(AgentStats path fitness _ gen _ _ evalCh compCh)
+    -> putStrLn ( path ++ "; fitness: " ++ (show fitness) ++ " from generation " ++ (show gen) ++ "; ratio: " ++ (show (compCh, evalCh))) ) ags
   putStrLn "\n\n\n"
   return ()
 
@@ -127,8 +128,10 @@ createChild :: AgentStats -> AgentStats-> Int -> IO (Maybe AgentStats)
 createChild codeAg@(AgentStats path fit ancestry generation state _ _ _) (AgentStats src _ _ _ _ _ _ _) id = do
   let destname = "GRPGenome" ++ show id ++ ".hs"
   let executable = (reverse $ drop 3 $ reverse path) ++ "hl"
+  putStrLn "trying to gen"
   --call Evolve - write resulting source code and stats file.
   --(code, out, err) <- readProcessWithExitCode ((reverse $ drop 3 $ reverse path) ++ "hl") ["-e", src, destname] "" --deprecated
+  writeFile (path ++ ".stat") $show codeAg
   (code, out, err) <- readProcessWithExitCode "timeout" ["10s", executable, "-e", src, destname] "" --with timeout
   if (code == ExitSuccess)
   then do
@@ -143,46 +146,72 @@ createChild codeAg@(AgentStats path fit ancestry generation state _ _ _) (AgentS
     return Nothing
 
 printEv :: String -> IO()
-printEv str = return () --putStrLn str
+printEv str = putStrLn str
+--printEv str = return ()
 
 --sequence operation for every agent: cast fitness on it - if returned agent is at least compilation-fit. This will compile the executable.
 --Then call the executable to eval the problem-specific fitness, assuming compilation was achieved.
 --Map the off-the-shelf fitness function. This will compile the genome. Then, call the headless executable to generate the problem-specific fitness value.
 --TODO:
---    This function probably needs to implement functionality to cast back the fitness of a genome to it's parent. Thus, parents producing non-compiling offspring are less likely to reproduce.
+--    This function probably needs to imprintEv str = plement functionality to cast back the fitness of a genome to it's parent. Thus, parents producing non-compiling offspring are less likely to reproduce.
 --    This regulation needs to respect the overall probability of generating a good genome, so both the quota of compilation and the fitness values of offspring need to be considered.
 --    There needs to be a clearly defined way in which a genome's fitness influences it's ancestry that doesn't involve infinite loopback.
 evaluateFitness :: Pool -> IO Pool
-evaluateFitness (Pool max min id agents) = do
-  ags <- parallel $ map (evalGenome) agents
-  return (Pool max min id ags)
+evaluateFitness (Pool max min id agents) =
+  do
+    evalResult <- parallel $ map (evalGenome) agents
+    let (ags, feedback) = unzip evalResult
+    let newAgs = digestFeedback ags $ concat feedback
+    putStrLn ("newPool" ++ ( show newAgs ))
+    return (Pool max min id newAgs)
+
+digestFeedback :: [AgentStats] -> [(Bool, FilePath)] -> [AgentStats]
+digestFeedback ags fb =
+  let
+    applyOneFeedbackItem agentlist feedbackItem =map (maybeApplyItemToAgent feedbackItem) agentlist
+    maybeApplyItemToAgent item agent =
+      if source agent == snd item
+      then agent {
+        evaluatedChildren = 1 + evaluatedChildren agent,
+        compiledChildren = (if fst item then 1 else 0) + compiledChildren agent
+      }
+      else agent
+  in foldl applyOneFeedbackItem ags fb
+--TODO: extract feedback data into pool: Assign feedback to agents.
+--foldl (\agentlist feedbackItem -> map (\agent -> if source agent == snd feedback then  else agent) agentlist) agents feedback
 
 --As per the above TODO mark, how about AgentStats -> IO (AgentStats, MoreData)
 --Where MoreData must carry: Is the Genome compilable? If so, did it terminate?
 --If so, how good does it perform? Basically, if this genome has never been evaluated before, a fitness value is needed and will be used when dealing with the parent.
 --TODO: Needs to return quickly if the genome has been eval'd before.
-evalGenome :: AgentStats -> IO AgentStats
-evalGenome ag@(AgentStats path fit ancestry generation state fitToParent eval comp) = do
-  printFit ("evaluating a genome " ++ path)
-  let statfile = path ++ ".stat"
-  src <- readFile path
-  (fitNew, errors) <- computeFitness src ((reverse $ drop 3 $ reverse path) ++ "hl.hs")
-  writeFile statfile $show $AgentStats path fitNew ancestry generation state fitToParent eval comp
-  if fitNew >= (Compilation, -1.0 * (2^127))
-  then do--process call to headless: Evaluate!
-    putStrLn ("ok " ++ path)
-    let executable = (reverse $ drop 3 $ reverse path) ++ "hl"
-    --(code, out, err) <- readProcessWithExitCode executable ["-f", path] "" --blocking execution
-    (code, out, err) <- readProcessWithExitCode "timeout" ["10s", executable, "-f", path] "" --now with timeout
-    if code /= ExitSuccess then putStrLn ("A genome failed to execute fitness properly\n" ++ err) else return ()
-    newDump <- readFile statfile
-    return $ read newDump
+evalGenome :: AgentStats -> IO (AgentStats, [(Bool, String)])
+evalGenome ag@(AgentStats path fitOld ancestry generation state fitToParent eval comp) =
+  if (fst fitOld) > Unchecked
+  then do
+    printFit "nothing to evaluate here"
+    return (ag, [])
   else do
-    printFit ("This genome failed to compile " ++ path)
-    return $ AgentStats path fitNew ancestry generation state fitToParent eval comp
+    printFit ("evaluating a genome " ++ path)
+    let statfile = path ++ ".stat"
+    src <- readFile path
+    (fitNew, errors) <- computeFitness src ((reverse $ drop 3 $ reverse path) ++ "hl.hs")
+    writeFile statfile $show $AgentStats path fitNew ancestry generation state fitToParent eval comp
+    if fitNew >= (Compilation, -1.0 * (2^127))
+    then do--process call to headless: Evaluate!
+      putStrLn ("ok " ++ path)
+      let executable = (reverse $ drop 3 $ reverse path) ++ "hl"
+      --(code, out, err) <- readProcessWithExitCode executable ["-f", path] "" --blocking execution
+      (code, out, err) <- readProcessWithExitCode "timeout" ["10s", executable, "-f", path] "" --now with timeout
+      if code /= ExitSuccess then putStrLn ("A genome failed to execute fitness properly\n" ++ err) else return ()
+      newDump <- readFile statfile
+      return (read newDump, if not fitToParent then [(True, parent ag)] else []) --return compiled agent; good feedback to the parent
+    else do
+      printFit ("This genome failed to compile " ++ path)
+      return (AgentStats path fitNew ancestry generation state fitToParent eval comp, if not fitToParent then [(False, parent ag)] else []) --bad feedback to the parent.
 
 printFit :: String -> IO()
-printFit str = return () --putStrLn str
+printFit str = return ()
+--printFit str = putStrLn str
 
 --TODO: removeDuplicates :: Pool -> IO Pool
 

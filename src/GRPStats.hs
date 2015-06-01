@@ -10,6 +10,7 @@ module GRPStats
 , state
 , evaluatedChildren
 , compiledChildren
+, parent
 ) where
 
 import GRPFitness
