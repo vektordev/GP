@@ -10,7 +10,6 @@ import System.Exit (ExitCode(..))
 import GRPSafety
 --import Debug.Trace
 import System.Process (readProcessWithExitCode, createProcess, shell)
-import System.Exit (ExitCode(..))
 import System.Random
 import GRPCommon
 import PartitioningProblem

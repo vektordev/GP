@@ -5,7 +5,7 @@ module GRPGenerator
 import Data.Char
 
 --This file will evaluate source code once the Plugin library is included in here.
-
+headlessPath :: FilePath
 headlessPath = "./GRPHeadless.hs"
 
 --filePath: GenomeUniqueIdent.hs
@@ -20,7 +20,7 @@ generate genomePath = do
   --putStrLn hlhsPath
   fileContent <- readFile headlessPath
   --get module name. Generate headless file for it: Drop and replace first line
-  let newCode = unlines (("import " ++ moduleName ++ " as Genome") : (tail $ lines fileContent))
+  let newCode = unlines (("import " ++ moduleName ++ " as Genome") : tail ( lines fileContent))
   --file2 <- readFile "GRPGenome0hl.hs"
   --putStrLn file2
   writeFile hlhsPath newCode
