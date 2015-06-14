@@ -31,7 +31,8 @@ data Pool = Pool {
   maxSize :: Int,
   filteredSize :: Int,
   nextID :: Int,
-  agents :: [AgentStats]
+  agents :: [AgentStats],
+  oldAgents :: [AgentStats]
 } deriving (Show, Read)
 
 data Settings = Settings {
@@ -60,14 +61,14 @@ test = do
 
 main :: IO()
 main = do
-  let params = Settings "./GRPSeed.hs" "./result" 3 60 600
+  let params = Settings "./GRPSeed.hs" "./result" 100 30 100
   ag <- initializeSeed $ initialAgent params
   let iPool = (initialPool ag (poolMin params) (poolMax params)) :: Pool
   compiledPool <- evaluateFitness iPool
   iteratePool (generations params) compiledPool (resultpath params)
 
 toDotFile :: Pool -> String
-toDotFile (Pool _ _ _ ags) = unlines ( "strict graph network {" : (map arrow ags) ++ (map label ags) ++ ["}"] )
+toDotFile (Pool _ _ _ ags oldags) = unlines ( "strict graph network {" : (map arrow (ags ++ oldags) ) ++ (map label (ags ++ oldags)) ++ ["}"] )
   where
     arrow ag = if not $ null $ ancestry ag then "\t" ++ (shortName $ source ag) ++ "--" ++ (shortName $ head $ ancestry ag) ++ ";" else ""
     shortName name = drop 2 $ reverse $ drop 3 $ reverse name
@@ -83,7 +84,7 @@ iteratePool 0 pool dump = do
   writeFile dump $ show pool
   writeFile "ancestry.dot" $ toDotFile pool
   showPool pool
-  stopGlobalPool
+  stopGlobalPool --this is about the thread pool...
 iteratePool n pool dump = do
   putStrLn "filtered at begin: "
   writeFile (dump ++ show n) $ show pool
@@ -97,7 +98,7 @@ iteratePool n pool dump = do
   iteratePool (n-1) (filterPool evalP) dump
 
 initialPool :: AgentStats -> Int -> Int -> Pool
-initialPool ags min max = Pool max min 1 [ags]
+initialPool ags min max = Pool max min 1 [ags] []
 
 --transforms from human-readable format to gobbledygook
 --removes intra-function newlines double newlines; then removes all the double spaces.
@@ -116,7 +117,7 @@ initializeSeed path = do
   writeFile "./GRPGenome0.hs.stat" $ show ag
   return ag
 
-showPool (Pool _ _ _ ags) = do
+showPool (Pool _ _ _ ags _) = do
   putStrLn "\n\n\n"
   _ <- sequence $ map (\(AgentStats path fitness _ gen _ _ evalCh compCh)
     -> putStrLn ( path ++ "; fitness: " ++ (show fitness) ++ " from generation " ++ (show gen) ++ "; ratio: " ++ (show (compCh, evalCh))) ) ags
@@ -127,12 +128,12 @@ filterMaybe :: [Maybe a] -> [a]
 filterMaybe a = map fromJust $ filter isJust a
 
 refillPool :: Pool -> IO Pool
-refillPool (Pool max f id agents) = do
+refillPool (Pool max f id agents oldags) = do
   let parents = take (max - length agents) $ concat $ repeat $ reverse $ sort agents
   putStrLn ("creating " ++ (show (max - length agents)) ++ " children")
   children <- sequence (map (\(p, id) -> createChild p p id) $ zip parents [id..])--TODO2: This is kinda risky, as I am not entirely confident I won't end up with duplicate IDs.
   putStrLn ("Children: " ++ ( show (filterMaybe children)))
-  return $ Pool max f (id + length (filterMaybe children)) ((filterMaybe children) ++ agents)
+  return $ Pool max f (id + length (filterMaybe children)) ((filterMaybe children) ++ agents) oldags
 --Very basic approach: each leftover parent generates children, starting with the best, until all slots are filled.
 --More sophisticated methods with certain biases for genetic diversity and better fitness values need to be tested.
 
@@ -142,7 +143,7 @@ createChild :: AgentStats -> AgentStats-> Int -> IO (Maybe AgentStats)
 createChild codeAg@(AgentStats path fit ancestry generation state _ _ _) (AgentStats src _ _ _ _ _ _ _) id = do
   let destname = "GRPGenome" ++ show id ++ ".hs"
   let executable = (reverse $ drop 3 $ reverse path) ++ "hl"
-  putStrLn "trying to gen"
+  putStrLn ("trying to generate id:" ++ (show id))
   --call Evolve - write resulting source code and stats file.
   --(code, out, err) <- readProcessWithExitCode ((reverse $ drop 3 $ reverse path) ++ "hl") ["-e", src, destname] "" --deprecated
   writeFile (path ++ ".stat") $show codeAg
@@ -171,13 +172,13 @@ printEv str = putStrLn str
 --    This regulation needs to respect the overall probability of generating a good genome, so both the quota of compilation and the fitness values of offspring need to be considered.
 --    There needs to be a clearly defined way in which a genome's fitness influences it's ancestry that doesn't involve infinite loopback.
 evaluateFitness :: Pool -> IO Pool
-evaluateFitness (Pool max min id agents) =
+evaluateFitness (Pool max min id agents oldags) =
   do
     evalResult <- parallel $ map (evalGenome) agents
     let (ags, feedback) = unzip evalResult
     let newAgs = digestFeedback ags $ concat feedback
     putStrLn ("newPool" ++ ( show newAgs ))
-    return (Pool max min id newAgs)
+    return (Pool max min id newAgs oldags)
 
 digestFeedback :: [AgentStats] -> [(Bool, FilePath)] -> [AgentStats]
 --TODO: This is a n^2 function, could be n log n by applying sorting.
@@ -230,10 +231,21 @@ printFit str = return ()
 
 --TODO: removeDuplicates :: Pool -> IO Pool
 
+--Junk - no compilation
+--unfit: more than 600 failed offspring
+--unfit: sorted out by pressure of other agents
+--fit: none of the above
+
 filterPool :: Pool -> Pool
-filterPool (Pool m fSize id ags) = Pool m fSize id
-  (filter
-    (\ag ->
-      fst ( getFitness ag) >= Compilation
-      && (evaluatedChildren ag < 500 || compiledChildren ag > 0))
-    (take fSize (sortBy ( flip compare) ags)))
+filterPool (Pool m fSize id ags oldags) = Pool m fSize id fit (unfit ++ oldags)
+  where
+    noJunk = filter (\ag -> (fst $ getFitness ag) >= Compilation) ags
+    (f1, unfit1) = filter2 (\ag -> evaluatedChildren ag < 600 || compiledChildren ag > 0) noJunk
+    (fit, unfit2) = if length f1 > fSize then (take fSize f1, drop fSize f1) else (f1, [])
+    unfit = unfit1 ++ unfit2
+    filter2 pred lst = ( filter pred lst, filter (not.pred) lst )
+--  (filter
+--    (\ag -> --select those that are at least compiling and that haven't had more than 500 failures without a success.
+--      fst ( getFitness ag) >= Compilation
+--    && (evaluatedChildren ag < 600 || compiledChildren ag > 0))
+--    (take fSize (sortBy ( flip compare) ags))) --take the fSize best ags
