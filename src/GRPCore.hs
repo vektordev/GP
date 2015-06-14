@@ -60,20 +60,34 @@ test = do
 
 main :: IO()
 main = do
-  let params = Settings "./GRPSeed.hs" "./result" 5 60 600
+  let params = Settings "./GRPSeed.hs" "./result" 3 60 600
   ag <- initializeSeed $ initialAgent params
   let iPool = (initialPool ag (poolMin params) (poolMax params)) :: Pool
   compiledPool <- evaluateFitness iPool
   iteratePool (generations params) compiledPool (resultpath params)
 
+toDotFile :: Pool -> String
+toDotFile (Pool _ _ _ ags) = unlines ( "strict graph network {" : (map arrow ags) ++ (map label ags) ++ ["}"] )
+  where
+    arrow ag = if not $ null $ ancestry ag then "\t" ++ (shortName $ source ag) ++ "--" ++ (shortName $ head $ ancestry ag) ++ ";" else ""
+    shortName name = drop 2 $ reverse $ drop 3 $ reverse name
+    label ag =
+      "\t" ++ (shortName $ source ag)
+      ++ "[label=\"" ++ ( shortName $ source ag )
+      ++ " " ++ ( show $ compiledChildren ag )
+      ++ " / " ++ ( show $ evaluatedChildren ag ) ++ "\"];"
+
 iteratePool :: Int -> Pool -> FilePath -> IO()
 iteratePool 0 pool dump = do
+  writeFile (dump ++ "hr") $ unlines $ map (\(AgentStats path _ ancestry _ _ _ evalCh compCh) -> "Agent: " ++ path ++ ", ratio " ++ (show compCh) ++  "%" ++ (show evalCh) ++ ", ancestry: " ++ show ancestry ) $ agents pool
   writeFile dump $ show pool
+  writeFile "ancestry.dot" $ toDotFile pool
   showPool pool
   stopGlobalPool
 iteratePool n pool dump = do
   putStrLn "filtered at begin: "
   writeFile (dump ++ show n) $ show pool
+  writeFile (dump ++ "hr" ++ show n) $ unlines $ map (\(AgentStats path _ ancestry _ _ _ evalCh compCh) -> "Agent: " ++ path ++ ", ratio " ++ (show compCh) ++  "%" ++ (show evalCh) ++ ", ancestry: " ++ show ancestry ) $ agents pool
   showPool pool;
   fullP <- refillPool pool
   putStrLn "Done refilling"
