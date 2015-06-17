@@ -42,8 +42,8 @@ computeFitness source path = do
       --TODO: Compute base fitness here: Code length, Hlint, runtime of mutate, performance of mutate (call and use shallow eval)
       --This function will not implement performance in a specific problem domain.
     else do
-      putStrLn ("no compilation " ++ (show $ length err))
-      putStrLn err
+      fitOut ("no compilation " ++ (show $ length err))
+      fitOut err
       return $ compileErrorFitness out err -- fitness and feedback on failed compilation
 
 --TODO 2: query multiple times with different input data; get median.

@@ -38,7 +38,7 @@ main = do
     (newFit, newState) <- computeProblemFitness Genome.act (state oldStats)
     putStrLn ("newFit = " ++ show newFit)
     let newStats = AgentStats (source oldStats) (Compilation, newFit) (ancestry oldStats) (generation oldStats) newState False (evaluatedChildren oldStats) (compiledChildren oldStats) :: AgentStats
-    writeFile (statFile ++ "~") $show newStats --Always false, since we're recomputing, we might as well.
+    writeFile (statFile ++ "~") $show newStats
     renameFile (statFile ++ "~") statFile
     --TODO2: verify correct copying
 
@@ -48,10 +48,13 @@ evolve parentStatFile srcFile newFileName = do
   putStrLn "stuff"
   pStatString <- System.IO.Strict.readFile parentStatFile
   let pStat = read pStatString :: AgentStats
-  src <- System.IO.Strict.readFile srcFile --drop safetyprefix
+  src <- System.IO.Strict.readFile srcFile
   rng <- newStdGen
   let (newCode, newState) = reprogram [rng] (state pStat) [fromJust $ dropSafetyPrefix src]
-  writeFile newFileName ("{-# LANGUAGE Safe #-}\nmodule " ++ (reverse $ drop 3 $ reverse newFileName) ++ "\n" ++ (unlines $ drop 2 $ lines $ fromJust $ getSafetyPrefix src) ++ newCode)
-  let stats = AgentStats ("./" ++ newFileName) (Unchecked, 0.0) (createAncestry pStat) (1+ generation pStat) [] False 0 0 :: AgentStats
-  writeFile (newFileName ++ ".stat") $ show stats
-  putStrLn "ev terminated"
+  if newCode == srcFile -- primitive external duplicate Control
+  then putStrLn "Welp! That's a duplicate!"
+  else do
+    writeFile newFileName ("{-# LANGUAGE Safe #-}\nmodule " ++ (reverse $ drop 3 $ reverse newFileName) ++ "\n" ++ (unlines $ drop 2 $ lines $ fromJust $ getSafetyPrefix src) ++ newCode)
+    let stats = AgentStats ("./" ++ newFileName) (Unchecked, 0.0) (createAncestry pStat) (1+ generation pStat) [] False 0 0 :: AgentStats
+    writeFile (newFileName ++ ".stat") $ show stats
+    putStrLn "ev terminated"

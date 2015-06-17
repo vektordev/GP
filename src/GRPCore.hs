@@ -63,7 +63,7 @@ test = do
 
 main :: IO()
 main = do
-  let params = Settings "./GRPSeed.hs" "./result" 300 30 200
+  let params = Settings "./GRPSeed.hs" "./result" 20 30 100
   ag <- initializeSeed $ initialAgent params
   let iPool = (initialPool ag (poolMin params) (poolMax params)) :: Pool
   compiledPool <- evaluateFitness iPool []
@@ -93,10 +93,10 @@ iteratePool n pool dump = do
   writeFile (dump ++ "hr" ++ show n) $ unlines $ map (\(AgentStats path _ ancestry _ _ _ evalCh compCh) -> "Agent: " ++ path ++ ", ratio " ++ (show compCh) ++  "%" ++ (show evalCh) ++ ", ancestry: " ++ show ancestry ) $ agents pool
   showPool pool;
   (crashedParents, fullP) <- refillPool pool
-  putStrLn "Done refilling"
+  --putStrLn "Done refilling"
   evalP <- evaluateFitness fullP crashedParents
-  putStrLn "with Fitness values: "
-  showPool evalP
+  --putStrLn "with Fitness values: "
+  --showPool evalP
   iteratePool (n-1) (filterPool evalP) dump
 
 initialPool :: AgentStats -> Int -> Int -> Pool
@@ -129,12 +129,12 @@ showPool (Pool _ _ _ ags _) = do
 refillPool :: Pool -> IO ([FilePath], Pool)
 refillPool (Pool max f id agents oldags) = do
   let parents = take (max - length agents) $ concat $ repeat $ reverse $ sort agents
-  putStrLn ("creating " ++ (show (max - length agents)) ++ " children")
+  --putStrLn ("creating " ++ (show (max - length agents)) ++ " children")
   --this could possibly be parallelized:
   --However, if one Genome produces several offspring, they should be sequenced.
   --In other words, we can generate each genome's children sequentially, and can do that in parallel for all the parent genomes..
   children <- sequence (map (\(p, id) -> createChild p p id) $ zip parents [id..])--TODO2: This is kinda risky, as I am not entirely confident I won't end up with duplicate IDs.
-  putStrLn ("Children: " ++ ( show (lefts children)))
+  --putStrLn ("Children: " ++ ( show (lefts children)))
   return $ (rights children, Pool max f (id + length (lefts children)) ((lefts children) ++ agents) oldags)
 --Very basic approach: each leftover parent generates children, starting with the best, until all slots are filled.
 --More sophisticated methods with certain biases for genetic diversity and better fitness values need to be tested.
@@ -145,7 +145,7 @@ createChild :: AgentStats -> AgentStats-> Int -> IO (Either AgentStats FilePath)
 createChild codeAg@(AgentStats path fit ancestry generation state _ _ _) (AgentStats src _ _ _ _ _ _ _) id = do
   let destname = "GRPGenome" ++ show id ++ ".hs"
   let executable = (reverse $ drop 3 $ reverse path) ++ "hl"
-  putStrLn ("trying to generate id:" ++ (show id))
+  --putStrLn ("trying to generate id:" ++ (show id))
   --call Evolve - write resulting source code and stats file.
   --(code, out, err) <- readProcessWithExitCode ((reverse $ drop 3 $ reverse path) ++ "hl") ["-e", src, destname] "" --deprecated
   writeFile (path ++ ".stat") $show codeAg
@@ -154,7 +154,6 @@ createChild codeAg@(AgentStats path fit ancestry generation state _ _ _) (AgentS
   then do
     generate destname --generate Headless file
     dump <- System.IO.Strict.readFile (destname ++ ".stat")
-    putStrLn ("dump read for agent: " ++ show id)
     return $ Left $ read dump
   else do
     --TODO: This part should definitely increment the agent's failure count! See also digestFeedback.
@@ -167,7 +166,7 @@ createChild codeAg@(AgentStats path fit ancestry generation state _ _ _) (AgentS
     return $ Right path
 
 printEv :: String -> IO()
-printEv str = putStrLn str
+printEv str = return() --putStrLn str
 --printEv str = return ()
 
 --sequence operation for every agent: cast fitness on it - if returned agent is at least compilation-fit. This will compile the executable.
@@ -228,7 +227,7 @@ evalGenome ag@(AgentStats path fitOld ancestry generation state fitToParent eval
       newDump <- System.IO.Strict.readFile statfile
       return (read newDump, if not fitToParent then [(True, parent ag)] else []) --return compiled agent; good feedback to the parent
     else do
-      printFit ("This genome failed to compile " ++ path)
+      putStrLn ("This genome failed to compile " ++ path)
       return (AgentStats path fitNew ancestry generation state fitToParent eval comp, if not fitToParent then [(False, parent ag)] else []) --bad feedback to the parent.
 
 printFit :: String -> IO()
