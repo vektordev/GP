@@ -52,7 +52,9 @@ evolve parentStatFile srcFile newFileName = do
   rng <- newStdGen
   let (newCode, newState) = reprogram [rng] (state pStat) [fromJust $ dropSafetyPrefix src]
   if newCode == srcFile -- primitive external duplicate Control
-  then putStrLn "Welp! That's a duplicate!"
+  then do
+    putStrLn "Welp! That's a duplicate!"
+    undefined --TODO: This is possibly a bit hacky.
   else do
     writeFile newFileName ("{-# LANGUAGE Safe #-}\nmodule " ++ (reverse $ drop 3 $ reverse newFileName) ++ "\n" ++ (unlines $ drop 2 $ lines $ fromJust $ getSafetyPrefix src) ++ newCode)
     let stats = AgentStats ("./" ++ newFileName) (Unchecked, 0.0) (createAncestry pStat) (1+ generation pStat) [] False 0 0 :: AgentStats
