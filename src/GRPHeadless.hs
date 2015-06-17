@@ -6,6 +6,8 @@ import GRPSeed as Genome
 
 --TODO for usage of Genome's state: Add another CLI parameter that reads state and writes it to agentStats
 
+import System.IO.Strict(readFile)
+
 import GRPFitness
 import System.Random
 import GRPCommon
@@ -31,7 +33,7 @@ main = do
   let statFile = (args !! 1) ++ ".stat"
   if head args == "-e" then evolve statFile (args !! 1) (args !! 2) else do
     putStrLn "fitness was called"
-    file <- readFile statFile
+    file <- System.IO.Strict.readFile statFile
     let oldStats = read file :: AgentStats
     (newFit, newState) <- computeProblemFitness Genome.act (state oldStats)
     putStrLn ("newFit = " ++ show newFit)
@@ -44,11 +46,11 @@ evolve :: FilePath -> FilePath -> FilePath -> IO()
 evolve parentStatFile srcFile newFileName = do
   putStrLn "ev was called"
   putStrLn "stuff"
-  pStatString <- readFile parentStatFile
+  pStatString <- System.IO.Strict.readFile parentStatFile
   let pStat = read pStatString :: AgentStats
-  src <- readFile srcFile --drop safetyprefix
+  src <- System.IO.Strict.readFile srcFile --drop safetyprefix
   rng <- newStdGen
-  let (newCode, newState) = reprogram [rng] (state pStat) [fromJust $ dropSafetyPrefix src] 
+  let (newCode, newState) = reprogram [rng] (state pStat) [fromJust $ dropSafetyPrefix src]
   writeFile newFileName ("{-# LANGUAGE Safe #-}\nmodule " ++ (reverse $ drop 3 $ reverse newFileName) ++ "\n" ++ (unlines $ drop 2 $ lines $ fromJust $ getSafetyPrefix src) ++ newCode)
   let stats = AgentStats ("./" ++ newFileName) (Unchecked, 0.0) (createAncestry pStat) (1+ generation pStat) [] False 0 0 :: AgentStats
   writeFile (newFileName ++ ".stat") $ show stats

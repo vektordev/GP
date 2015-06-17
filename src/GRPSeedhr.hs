@@ -20,13 +20,13 @@ act :: [StdGen] -> State -> Input -> (Output, State)
 
 {-
 testrun = do
-  text <- readFile "./GRPSeed.hs"
+  text <- System.IO.StrictreadFile "./GRPSeed.hs"
   rng <- newStdGen
   let (newcode, _) = reprogram [rng] [] [fromJust $ dropSafetyPrefix text]
   return newcode
 
 t2 = do
-  text <- readFile "./GRPSeed.hs"
+  text <- System.IO.StrictreadFile "./GRPSeed.hs"
   let t2 = fromJust $ dropSafetyPrefix text
   let preproc = unwords $ {- Here be mutate -}concat $ intersperse ["\n"] $ map words $ lines t2
   return preproc

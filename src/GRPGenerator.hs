@@ -4,6 +4,8 @@ module GRPGenerator
 
 import Data.Char
 
+import System.IO.Strict(readFile)
+
 --This file will evaluate source code once the Plugin library is included in here.
 headlessPath :: FilePath
 headlessPath = "./GRPHeadless.hs"
@@ -18,7 +20,7 @@ generate genomePath = do
   let moduleName = reverse $ takeWhile isAlphaNum $ drop 3 $ reverse genomePath
   let hlhsPath = moduleName ++ "hl.hs"
   --putStrLn hlhsPath
-  fileContent <- readFile headlessPath
+  fileContent <- System.IO.Strict.readFile headlessPath
   --get module name. Generate headless file for it: Drop and replace first line
   let newCode = unlines (("import " ++ moduleName ++ " as Genome") : tail ( lines fileContent))
   --file2 <- readFile "GRPGenome0hl.hs"
