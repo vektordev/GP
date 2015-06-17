@@ -50,7 +50,7 @@ deep = do
   let params = Settings "./GRPSeed.hs" "./result" 500 30 300
   ag <- initializeSeed $ initialAgent params
   let iPool = (initialPool ag (poolMin params) (poolMax params)) :: Pool
-  compiledPool <- evaluateFitness iPool
+  compiledPool <- evaluateFitness iPool []
   iteratePool (generations params) compiledPool (resultpath params)
 
 test :: IO()
@@ -58,15 +58,15 @@ test = do
   let params = Settings "./GRPSeed.hs" "./result" 1 5 30
   ag <- initializeSeed $ initialAgent params
   let iPool = (initialPool ag (poolMin params) (poolMax params)) :: Pool
-  compiledPool <- evaluateFitness iPool
+  compiledPool <- evaluateFitness iPool []
   iteratePool (generations params) compiledPool (resultpath params)
 
 main :: IO()
 main = do
-  let params = Settings "./GRPSeed.hs" "./result" 100 30 300
+  let params = Settings "./GRPSeed.hs" "./result" 300 30 200
   ag <- initializeSeed $ initialAgent params
   let iPool = (initialPool ag (poolMin params) (poolMax params)) :: Pool
-  compiledPool <- evaluateFitness iPool
+  compiledPool <- evaluateFitness iPool []
   iteratePool (generations params) compiledPool (resultpath params)
 
 toDotFile :: Pool -> String
@@ -94,7 +94,7 @@ iteratePool n pool dump = do
   showPool pool;
   (crashedParents, fullP) <- refillPool pool
   putStrLn "Done refilling"
-  evalP <- evaluateFitness fullP
+  evalP <- evaluateFitness fullP crashedParents
   putStrLn "with Fitness values: "
   showPool evalP
   iteratePool (n-1) (filterPool evalP) dump
@@ -177,12 +177,12 @@ printEv str = putStrLn str
 --    This function probably needs to imprintEv str = plement functionality to cast back the fitness of a genome to it's parent. Thus, parents producing non-compiling offspring are less likely to reproduce.
 --    This regulation needs to respect the overall probability of generating a good genome, so both the quota of compilation and the fitness values of offspring need to be considered.
 --    There needs to be a clearly defined way in which a genome's fitness influences it's ancestry that doesn't involve infinite loopback.
-evaluateFitness :: Pool -> IO Pool
-evaluateFitness (Pool max min id agents oldags) =
+evaluateFitness :: Pool -> [FilePath] -> IO Pool
+evaluateFitness (Pool max min id agents oldags) crashedParents =
   do
     evalResult <- parallel $ map (evalGenome) agents
     let (ags, feedback) = unzip evalResult
-    let newAgs = digestFeedback ags $ concat feedback
+    let newAgs = digestFeedback ags ((concat feedback) ++ (zip (repeat False) crashedParents))
     putStrLn ("newPool" ++ ( show newAgs ))
     return (Pool max min id newAgs oldags)
 
