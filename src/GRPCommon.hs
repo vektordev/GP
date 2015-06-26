@@ -174,7 +174,7 @@ lexems = [
   "$",
   "->",
   "<-",
-  "do",
+  --"do", crappy idea - lotsa infinite loops
   "\n",
   "\"\\n\"",
   "True",

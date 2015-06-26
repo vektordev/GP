@@ -51,12 +51,12 @@ evolve parentStatFile srcFile newFileName = do
   src <- System.IO.Strict.readFile srcFile
   rng <- newStdGen
   let (newCode, newState) = reprogram [rng] (state pStat) [fromJust $ dropSafetyPrefix src]
-  if newCode == srcFile -- primitive external duplicate Control
+  if newCode == ( fromJust $ dropSafetyPrefix src ) -- primitive external duplicate Control, Mk. 2
   then do
     putStrLn "Welp! That's a duplicate!"
     undefined --TODO: This is possibly a bit hacky.
   else do
-    writeFile newFileName ("{-# LANGUAGE Safe #-}\nmodule " ++ (reverse $ drop 3 $ reverse newFileName) ++ "\n" ++ (unlines $ drop 2 $ lines $ fromJust $ getSafetyPrefix src) ++ newCode)
+    writeFile newFileName ("--{-# LANGUAGE Safe #-}\nmodule " ++ (reverse $ drop 3 $ reverse newFileName) ++ "\n" ++ (unlines $ drop 2 $ lines $ fromJust $ getSafetyPrefix src) ++ newCode)
     let stats = AgentStats ("./" ++ newFileName) (Unchecked, 0.0) (createAncestry pStat) (1+ generation pStat) [] False 0 0 :: AgentStats
     writeFile (newFileName ++ ".stat") $ show stats
     putStrLn "ev terminated"

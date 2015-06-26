@@ -1,4 +1,4 @@
-{-# LANGUAGE Safe #-}
+--{-# LANGUAGE Safe #-}
 module GRPSeed
 ( act
 , reprogram
@@ -12,6 +12,7 @@ import System.Random
 import Data.Maybe (isJust, fromJust)
 import Data.List
 import GRPCommon
+import Language.Haskell.Exts.Parser
 
 reprogram :: [StdGen] -> State -> [String] -> (String, State)
 act :: [StdGen] -> State -> Input -> (Output, State)
@@ -32,9 +33,12 @@ t2 = do
   return preproc
 -}
 --The Danger Zone starts here. Keep the next line up to date:
-safeLines = 35
+safeLines = 36
 act rngs state inp = ( (take (div (length inp) 2) inp, drop (div (length inp) 2) inp), state)
-reprogram ( r1 : _ ) state ( source1 : _ ) = let candidates = map ( \ rng -> lexemlisttransform ( preproc source1 ) rng state ) ( infrg r1 ) in (head $ filter (\candidate -> candidate /= ( postproc $ preproc source1 ) ) (map postproc $ filter (\x -> True) candidates), state )
+reprogram ( r1 : _ ) state ( source1 : _ ) = let candidates = map ( \ rng -> lexemlisttransform ( preproc source1 ) rng state ) ( infrg r1 ) in (head $ filter ( \ candidate -> ( candidate /= postproc ( preproc source1 ) ) && ( parseable candidate ) ) (map postproc $ filter (\x -> True) candidates), state )
+parseable str = let result = parseModule str in wasSuccess result
+wasSuccess ( ParseFailed _ _ ) = False
+wasSuccess ( ParseOk _ ) = True
 preproc str = concat $ intersperse ["\n"] $ map words $ lines str
 postproc strs = rmlist ( \ x y -> x == '\n' && y == ' ' ) $ unwords strs
 infrg rg = let ( x , y ) = split rg in x : infrg y
@@ -42,4 +46,4 @@ rmlist predicate ( x : y : ys ) = if predicate x y then rmlist predicate ( x : y
 rmlist a xs = xs
 initial = [ 10000000 , 20000000 ]
 lexemlisttransform [] rng state = []
-lexemlisttransform ( lex : lst ) rng state = let ( decision , rng2 ) = next rng :: ( Int , StdGen ) in if decision < 10000000 then let ( n , rng3 ) = next rng2 in ( lexems !! ( mod n $ length lexems ) ) : lex : ( lexemlisttransform lst rng3 state) else if decision < 20000000 then lexemlisttransform lst rng2 state else lex : ( lexemlisttransform lst rng2 state)
+lexemlisttransform ( lex : lst ) rng state = let ( decision , rng2 ) = next rng :: ( Int , StdGen ) in if decision < ( head initial ) then let ( n , rng3 ) = next rng2 in ( lexems !! ( mod n $ length lexems ) ) : lex : ( lexemlisttransform lst rng3 state) else if decision < ( last initial ) then lexemlisttransform lst rng2 state else lex : ( lexemlisttransform lst rng2 state)
