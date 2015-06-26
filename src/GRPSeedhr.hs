@@ -65,9 +65,9 @@ lexemlisttransform [] rng state = []
 lexemlisttransform ( lex : lst ) rng state =
   let ( decision , rng2 ) = next rng :: ( Int , StdGen )
   in
-    if decision < 10000000
+    if decision < ( head initial )
     then let ( n , rng3 ) = next rng2 in ( lexems !! mod n ( length lexems ) ) :  lex : lexemlisttransform lst rng3 state
     else
-      if decision < 20000000
+      if decision < ( last initial )
       then lexemlisttransform lst rng2 state
       else lex : lexemlisttransform lst rng2 state

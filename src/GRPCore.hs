@@ -22,6 +22,9 @@ import Control.Concurrent.ParallelIO.Global
 
 import Debug.Trace
 
+import Language.Haskell.Exts.Parser
+import Language.Haskell.Exts.Pretty
+
 --TODO: Implement abstract interfaces for:
 -- Continuous compound simulations
 -- Discrete compound simulations
@@ -45,6 +48,16 @@ data Settings = Settings {
   poolMax :: Int
 }
 
+--This can be used to improve the compile rate of children of the root genome.
+haskellSrcExtsTest :: IO()
+haskellSrcExtsTest = do
+  source <- System.IO.Strict.readFile "./GRPSeed.hs"
+  let parseResult = parseModule source
+  let ast = fromParseResult parseResult
+  putStrLn $show ast
+  putStrLn "\n\n\n"
+  putStrLn $ prettyPrint ast
+
 deep :: IO()
 deep = do
   let params = Settings "./GRPSeed.hs" "./result" 500 30 300
@@ -63,7 +76,7 @@ test = do
 
 main :: IO()
 main = do
-  let params = Settings "./GRPSeed.hs" "./result" 20 30 100
+  let params = Settings "./GRPSeed.hs" "./result" 10 30 100
   ag <- initializeSeed $ initialAgent params
   let iPool = (initialPool ag (poolMin params) (poolMax params)) :: Pool
   compiledPool <- evaluateFitness iPool []
@@ -107,6 +120,11 @@ initialPool ags min max = Pool max min 1 [ags] []
 --transformCode :: String -> String
 --transformCode readable = foldl () readable
 
+--generateDefaultGenerator = do
+  --TODO 1: compile the default codegen: call ghc on headless.hs
+
+getDefaultGenerator = "./GRPHeadless"
+
 initializeSeed :: FilePath -> IO AgentStats
 initializeSeed path = do
   --Copy source file
@@ -126,9 +144,16 @@ showPool (Pool _ _ _ ags _) = do
   putStrLn "\n\n\n"
   return ()
 
+--combines every agent's code gen with every agent's source code.
+--This can exceed the pool's max capacity, filling up to min capacity squared.
+cartesianProduct :: Pool -> IO Pool
+cartesianProduct (Pool max f id agents oldags) = do
+  children <- sequence $ map (\genomeID (c, s) -> createChild c s id) $ zip [id..] [(coder, source) | coder <- agents, source <- agents]
+  return $ (rights children, Pool max f (id + length (lefts children)) ((lefts children) ++ agents) oldags)
+
 refillPool :: Pool -> IO ([FilePath], Pool)
 refillPool (Pool max f id agents oldags) = do
-  let parents = take (max - length agents) $ concat $ repeat $ reverse $ sort agents
+  let parents = take (max - length agents) $ cycle $ reverse $ sort agents
   --putStrLn ("creating " ++ (show (max - length agents)) ++ " children")
   --this could possibly be parallelized:
   --However, if one Genome produces several offspring, they should be sequenced.
@@ -145,6 +170,7 @@ createChild :: AgentStats -> AgentStats-> Int -> IO (Either AgentStats FilePath)
 createChild codeAg@(AgentStats path fit ancestry generation state _ _ _) (AgentStats src _ _ _ _ _ _ _) id = do
   let destname = "GRPGenome" ++ show id ++ ".hs"
   let executable = (reverse $ drop 3 $ reverse path) ++ "hl"
+  --If the above is exchanged for a static executable, one can have a static code generator optimize the genome.
   --putStrLn ("trying to generate id:" ++ (show id))
   --call Evolve - write resulting source code and stats file.
   --(code, out, err) <- readProcessWithExitCode ((reverse $ drop 3 $ reverse path) ++ "hl") ["-e", src, destname] "" --deprecated
