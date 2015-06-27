@@ -19,6 +19,7 @@ import System.IO.Strict(readFile)
 import Data.Maybe
 import Data.List
 import Data.Either
+import Data.Function
 
 import Control.Applicative
 import Control.Concurrent.ParallelIO.Global
@@ -71,7 +72,7 @@ deep = do
 
 test :: IO()
 test = do
-  let params = Settings "./GRPSeed.hs" "./result" 1 5 30
+  let params = Settings "./GRPSeed.hs" "./result" 3 5 60
   ag <- initializeSeed $ initialAgent params
   let iPool = (initialPool ag (poolMin params) (poolMax params)) :: Pool
   compiledPool <- evaluateFitness iPool []
@@ -79,7 +80,7 @@ test = do
 
 main :: IO()
 main = do
-  let params = Settings "./GRPSeed.hs" "./result" 50 50 500
+  let params = Settings "./GRPSeed.hs" "./result" 3 50 60
   ag <- initializeSeed $ initialAgent params
   let iPool = (initialPool ag (poolMin params) (poolMax params)) :: Pool
   compiledPool <- evaluateFitness iPool []
@@ -160,8 +161,16 @@ cartesianProduct (Pool max f id agents oldags) = do
 
 refillPool :: Pool -> IO ([FilePath], Pool)
 refillPool (Pool max f id agents oldags) = do
-  let parents = take (max - length agents) $ cycle $ reverse $ sort agents
-  --putStrLn ("creating " ++ (show (max - length agents)) ++ " children")
+  let tokens = max - length agents
+  let parentFit = sortBy (compare `on` snd ) $ map (\ag -> (ag, getAggregateFitness ag) ) agents
+  let sumOfFits = sum $ snd $ unzip parentFit
+  let tokenPerFit = (fromIntegral tokens) / sumOfFits
+  let agTokens = map (\ (ag, fit) -> (ag, round( tokenPerFit * fit ) ) ) parentFit
+  let parents = concatMap (\ (ag, tok) -> replicate tok ag) agTokens
+
+  --let parents = take (max - length agents) $ cycle $ reverse $ sort agents
+  --alternative, deprecated definition of parents, though is more stable wrt token usage.
+
   --this could possibly be parallelized:
   --However, if one Genome produces several offspring, they should be sequenced.
   --In other words, we can generate each genome's children sequentially, and can do that in parallel for all the parent genomes..
@@ -188,7 +197,7 @@ createChild codeAg@(AgentStats path fit ancestry generation state _ _ _) (AgentS
     generate destname --generate Headless file
     dump <- System.IO.Strict.readFile (destname ++ ".stat")
     return $ Left $ read dump
-  else 
+  else
     if (code == ExitFailure 124) then do
       putStrLn ("the genome " ++ (show path) ++ " hit timeout when generating!")
       --Maybe, this is the place to heuristically detect infinilooping programs.

@@ -1,5 +1,6 @@
 module GRPStats
 ( AgentStats(AgentStats)
+, getAggregateFitness
 , createAncestry
 , findCommonAncestor
 --, setState
@@ -38,6 +39,17 @@ instance Eq AgentStats where
 
 instance Ord AgentStats where
   compare a1 a2 = compare (getFitness a1) (getFitness a2)
+
+getAggregateFitness :: AgentStats -> Float
+getAggregateFitness ag =
+  0.007
+  --Some constant to ensure some fairness for newer genomes.
+  --Basically, we don't want new genomes to never get evaluated.
+  --This value is relatively sure to exceed the negative effect from the fitness function.
+  + (( snd $ getFitness ag ) * 0.000000000001)
+  -- should roughly make up -.001
+  + if evaluatedChildren ag == 0 then 0.0 else (fromIntegral $ compiledChildren ag) / (fromIntegral $ evaluatedChildren ag)
+  --this will be 0.01 or so, but will climb to 1 for perfect codeGens.
 
 --TODO: Find common ancestor
 --The relevant segment of the search tree is a Y-shaped graph segment - the central node being the common ancestor.
