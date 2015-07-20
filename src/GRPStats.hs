@@ -9,6 +9,7 @@ module GRPStats
 , ancestry
 , generation
 , state
+, fitnessImpactOnParent
 , evaluatedChildren
 , compiledChildren
 , parent

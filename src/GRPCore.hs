@@ -8,6 +8,7 @@ import GRPSafety
 import PartitioningProblem
 import GRPStats
 import GRPGenerator
+import GRPTreeAnalytics
 
 import System.Environment (getArgs)
 import System.Random
@@ -20,6 +21,7 @@ import Data.Maybe
 import Data.List
 import Data.Either
 import Data.Function
+import Data.Tree
 
 import Control.Applicative
 import Control.Concurrent.ParallelIO.Global
@@ -44,6 +46,8 @@ data Pool = Pool {
   oldAgents :: [AgentStats]
 } deriving (Show, Read)
 
+type PoolTree = Tree AgentStats
+
 data Settings = Settings {
   initialAgent :: FilePath,
   resultpath :: FilePath,
@@ -61,6 +65,57 @@ haskellSrcExtsTest = do
   putStrLn $show ast
   putStrLn "\n\n\n"
   putStrLn $ prettyPrint ast
+
+treeThing = do
+  str <- System.IO.Strict.readFile "./result88"
+  let pool = read str
+  putStrLn $ show $ length $ agents pool
+  putStrLn $ show $ length $ oldAgents pool
+  putStrLn $ drawTree $ fmap show $ mkAgentsTree $ ((agents pool) ++ (oldAgents pool))
+
+
+processLogFile :: IO()
+processLogFile = do
+  content <- System.IO.Strict.readFile "result88"
+  let
+    pl = read content
+    filterLambda ag = evaluatedChildren ag /= 0
+    mapLambda ag = AgentStats (source ag) (getFitness ag) (if not $ null $ ancestry ag then [head $ ancestry ag] else []) (generation ag) (state ag) (fitnessImpactOnParent ag) (evaluatedChildren ag) (compiledChildren ag)
+    pl' = Pool (maxSize pl) (filteredSize pl) (nextID pl) (map mapLambda $ filter filterLambda$ agents pl) (map mapLambda $ filter filterLambda $ oldAgents pl)
+  --putStrLn $ show pl'
+  --showPool pl'
+  putStrLn $ drawTree $ fmap show $ toTree pl'
+
+toTree :: Pool -> PoolTree
+toTree (Pool _ _ _ new old) =
+  let
+    rootNode = Node (head $ filter (\ag -> source ag == "./GRPGenome0.hs") (new ++ old)) []
+    allnodes = filter (/= rootNode) $ map (\ag -> Node ag [])(new ++ old)
+  in
+    trace ("root = " ++ show rootNode ) combineForestWithRoot allnodes rootNode
+
+combineForestWithRoot :: [PoolTree] -> PoolTree -> PoolTree
+combineForestWithRoot ns root =
+  let (remainder, newRoot) = foldr (\node (rest, r) -> if Nothing == appendTree node r then (node:rest, r) else (rest, fromJust $ appendTree node r) ) ([], root) ns
+  in if False then trace ("remainder after gen'ing tree: " ++ (show $ length remainder )) newRoot else trace ("remainder when gen'ing tree: " ++ (show $ length remainder )) combineForestWithRoot remainder newRoot
+
+agent name dad = Node (AgentStats name (Unchecked, 0.0) [dad] 0 [] True 0 0) []
+
+appendTree :: PoolTree -> PoolTree -> Maybe PoolTree
+--append a to b - or try to, that is
+appendTree a b =
+  let
+    zippedSubNodes = map (\subNode -> (rootLabel b , delete subNode (subForest b), subNode)) (subForest b)
+    attempts =
+      (catMaybes ((appendToNode a b)
+      : map (\(root, rest, node) -> maybe Nothing (\x -> Just $ Node root (x : rest)) (appendTree a node) ) zippedSubNodes ) ) :: [PoolTree]
+  in if null attempts then Nothing else Just $ head attempts
+--  let attempts = catMaybes $ fmap (\parent -> appendToNode a parent) b
+
+appendToNode child@(Node elem rest) parent@(Node elem' otherChildren) =
+  if trace ("Trying to append " ++ source elem ++ " with parent " ++ (head $ ancestry elem) ++ " to " ++ source elem' ) (head $ ancestry elem) == (source elem')
+  then trace "success" Just $ Node elem' (child:otherChildren)
+  else Nothing
 
 deep :: IO()
 deep = do
