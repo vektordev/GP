@@ -159,7 +159,7 @@ programAtoms = [
 --  putStrLn $ show ((nub $ words $ unlines $ drop 44 $ lines src) \\ lexems)
 
 --do src <- readFile "./GRPSeedhr.hs" ; putStrLn $ unlines $ nub $ sort $ words $ unlines $ drop 44 $ lines src
-lexems = [
+stuff = [
   "(",
   ")",
   "[",
@@ -278,6 +278,36 @@ lexems = [
   ]
 
 --lexems = map fst3 programAtoms ++ map fst4 functions
+
+ppWords = [
+  "foldl",
+  "foldr",
+  "map",
+  "filter",
+  "(",
+  ")",
+  "\\",
+  "+",
+  "-",
+  "*",
+  "div",
+  "==",
+  "<=",
+  "/=",
+  "not",
+  "act",
+  "func",
+  "p1",
+  "p2",
+  "p3",
+  "p4",
+  "let",
+  "in",
+  "->",
+  "$",
+  "."
+  ]
+lexems = ppWords
 
 ws1 [] = 0
 ws1 ((_,_,x):xs) = x + ws1 xs

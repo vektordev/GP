@@ -46,7 +46,7 @@ computeFitness source path = do
       fitOut err
       return $ compileErrorFitness out err -- fitness and feedback on failed compilation
 
---TODO 2: query multiple times with different input data; get median.
+--TODO 2: query multiple times with different input data; get median/mean.
 computeProblemFitness :: ([StdGen] -> State -> Input -> (Output, State)) -> State -> IO (Float, State)
 computeProblemFitness actFnc agState = do
   rng <- newStdGen
