@@ -48,5 +48,5 @@ lexemlisttransform [] rng state = []
 lexemlisttransform ( lex : lst ) rng state = let ( decision , rng2 ) = next rng :: ( Int , StdGen ) in if decision < ( head initial ) then let ( n , rng3 ) = next rng2 in ( lexems !! ( mod n $ length lexems ) ) : lex : ( lexemlisttransform lst rng3 state) else if decision < ( last initial ) then lexemlisttransform lst rng2 state else lex : ( lexemlisttransform lst rng2 state)
 
 --The Danger Zone starts here. Keep the next line up to date:
-safeLines = 36
+safeLines = 51
 act rngs state inp = ( (take (div (length inp) 2) inp, drop (div (length inp) 2) inp), state)

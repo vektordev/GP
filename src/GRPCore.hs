@@ -135,7 +135,7 @@ test = do
 
 main :: IO()
 main = do
-  let params = Settings "./GRPSeed.hs" "./result" 3 50 60
+  let params = Settings "./GRPSeed.hs" "./result" 50 30 600
   ag <- initializeSeed $ initialAgent params
   let iPool = (initialPool ag (poolMin params) (poolMax params)) :: Pool
   compiledPool <- evaluateFitness iPool []
@@ -162,6 +162,7 @@ iteratePool 0 pool dump = do
 iteratePool n pool dump = do
   putStrLn "filtered at begin: "
   writeFile (dump ++ show n) $ show pool
+  writeFile (dump ++ show n ++ ".dot") $ toDotFile pool
   writeFile (dump ++ "hr" ++ show n) $ unlines $ map (\(AgentStats path _ ancestry _ _ _ evalCh compCh) -> "Agent: " ++ path ++ ", ratio " ++ (show compCh) ++  "%" ++ (show evalCh) ++ ", ancestry: " ++ show ancestry ) $ agents pool
   showPool pool;
   (crashedParents, fullP) <- refillPool pool

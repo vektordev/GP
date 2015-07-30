@@ -7,18 +7,13 @@ import GRPFitness
 import System.Random
 import GRPCommon
 import PartitioningProblem
+import GRPMath
 
 --TODO: there's probably a gaussian somewhere on hackage already.
 
-mean lst = (sum lst) / (fromIntegral $ length lst)
-
-variance lst =
-  let mn = mean lst
-  in (sum $ map (\elem -> (elem-mn)^2) lst ) / (fromIntegral $ (length lst - 1 ))
-
 test :: IO ()
 test = do
-  let (cnt, lng) = (500,10)
+  let (cnt, lng) = (5000,2000)
   (m1,v1) <- fitnessStability act [] cnt lng
   (m3,v3) <- fitnessStability goodNAct [] cnt lng
   (m2,v2) <- fitnessStability badButBetter [] cnt lng
