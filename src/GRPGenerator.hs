@@ -6,12 +6,11 @@ import Data.Char
 
 import System.IO.Strict(readFile)
 
---This file will evaluate source code once the Plugin library is included in here.
 headlessPath :: FilePath
 headlessPath = "./GRPHeadless.hs"
 
 --filePath: GenomeUniqueIdent.hs
---This function generates a hl.hs file
+--This function generates a matching hl.hs file that contains a main function and the relevant boilerplate.
 generate :: FilePath -> IO ()
 generate genomePath = do
   --putStrLn "generating"

@@ -1,4 +1,4 @@
-module PartitioningProblem 
+module PartitioningProblem
 ( fitness
 , generateInput
 ) where
@@ -6,13 +6,14 @@ module PartitioningProblem
 import Data.List
 import System.Random
 
---TODO 3: replace type with data. Possibly, we'll need data constructors later on...??
+--fitness function for the partitioning problem, as well as a random generator for input.
+
 type Input = [Int]
 type Output = ([Int], [Int])
 
---TODO 2:
 fitness :: Input -> Output -> Float
-fitness input out = if sort input == sort (fst out ++ snd out)
+fitness input out =
+  if sort input == sort (fst out ++ snd out) --is it a valid partitioning?
   then - (fromIntegral $ abs ((sum $ fst out) - (sum $ snd out)))
   else - (fromIntegral $ sum $ map abs input)
 

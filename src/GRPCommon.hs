@@ -26,6 +26,16 @@ module GRPCommon
 , lexems
 ) where
 
+{-
+  This file contains some basic functions that are supposed to be used by the code generator
+  Most of it is outdated, as it originates from an earler model of the code generator
+  Even the up-to-date part could use work and maybe additional data.
+  For example, it seems vital that the code generator has access to some statistical data about
+  the words it's supposed to write code from. This includes, for example, likelihood of said word appearing in code.
+  While said likelihood could be a genetic parameter, it might as well be extracted from somewhere else and taken as domain knowledge.
+  The question of "is this domain knowledge I'm including part of the code gen or a library for the code gen?" is a common theme.
+-}
+
 --TODO: This whole file is deprecated and needs refactoring.
 
 --these need domain specific modeling, maybe. Output and Input should be typed according to the problem domain.

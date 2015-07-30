@@ -4,7 +4,7 @@ import GRPSeed as Genome
 --The imported file should have a consistent module name without any '-'
 --also, the stat file should exist
 
---TODO for usage of Genome's state: Add another CLI parameter that reads state and writes it to agentStats
+--TODO for usage of Genome's State variable: Add another CLI parameter that reads state and writes it to agentStats
 
 import System.IO.Strict(readFile)
 
@@ -21,26 +21,33 @@ import System.Directory
 
 --This whole file is a hack. Once System.Plugin does as I please, this will not be needed.
 
---CLI option to call evolve
---main: generate AgentStats by performing X on Y
+--CLI options:
 -- ./headless -e GRPGenome0.hs GRPGenome1.hs
+--  Make Genome 0 generate a modified version of itself named Genome 1
+
 -- ./headless -f GRPGenome0.hs
+--  Evaluate the fitness value of Genome 0
+
 main :: IO()
 main = do
   putStrLn "headless was called"
   args <- getArgs
   putStrLn $ show args
   let statFile = (args !! 1) ++ ".stat"
-  if head args == "-e" then evolve statFile (args !! 1) (args !! 2) else do
-    putStrLn "fitness was called"
-    file <- System.IO.Strict.readFile statFile
-    let oldStats = read file :: AgentStats
-    (newFit, newState) <- computeProblemFitness Genome.act (state oldStats)
-    putStrLn ("newFit = " ++ show newFit)
-    let newStats = AgentStats (source oldStats) (Compilation, newFit) (ancestry oldStats) (generation oldStats) newState False (evaluatedChildren oldStats) (compiledChildren oldStats) :: AgentStats
-    writeFile (statFile ++ "~") $show newStats
-    renameFile (statFile ++ "~") statFile
-    --TODO2: verify correct copying
+  if head args == "-e" then evolve statFile (args !! 1) (args !! 2) else fitnessEval stateFile
+
+fitnessEval :: FilePath -> IO()
+fitnessEval stateFile =
+  putStrLn "fitness was called"
+  file <- System.IO.Strict.readFile statFile
+  let oldStats = read file :: AgentStats
+  (newFit, newState) <- computeProblemFitness Genome.act (state oldStats)
+  putStrLn ("newFit = " ++ show newFit)
+  let newStats = AgentStats (source oldStats) (Compilation, newFit) (ancestry oldStats) (generation oldStats) newState False (evaluatedChildren oldStats) (compiledChildren oldStats) :: AgentStats
+  writeFile (statFile ++ "~") $show newStats
+  renameFile (statFile ++ "~") statFile
+  --TODO2: verify correct copying
+
 
 evolve :: FilePath -> FilePath -> FilePath -> IO()
 evolve parentStatFile srcFile newFileName = do

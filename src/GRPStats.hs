@@ -19,6 +19,11 @@ import GRPFitness
 import Data.Eq
 import GRPCommon
 
+{-
+  Stores a single Genome's stats as well as the location of it's source.
+  Provides various functions to access the resulting data structure.
+-}
+
 data AgentStats = AgentStats{
   source :: FilePath,
   getFitness :: Fitness,

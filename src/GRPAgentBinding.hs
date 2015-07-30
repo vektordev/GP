@@ -11,6 +11,8 @@ import GRPCommon
 --This file is currently DEAD CODE. Compilation is done by calling ghc and execution is done by calling the generated executables.
 --Documentation of that procedure is in GRPHeadless
 
+--The best bet to get this up and running probably is plugin.
+
 --When one of these three is called for the first time, eval initial state and inject. That is, when compilation is needed.
 --Afterwards, store State to AgentStats
 

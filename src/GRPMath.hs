@@ -8,6 +8,8 @@ where
 import Debug.Trace
 
 --Statistics functions
+--TODO: there's probably a gaussian package somewhere on hackage already.
+
 mean lst = (sum lst) / (fromIntegral $ length lst)
 
 variance lst =
@@ -15,6 +17,7 @@ variance lst =
   in (sum $ map (\elem -> (elem-mn)^2) lst ) / (fromIntegral $ (length lst - 1 ))
 
 --How to assign a number of tickets to a list of weights?
+--TODO: This needs to be incorporated into GRPCore.
 weightedAssign :: (RealFrac a, Integral b) => b -> [a] -> [b]
 weightedAssign n weights = map (\wt -> floor $ (wt * (searchWeight 0.0 10000.0 n weights) ) ) weights
 

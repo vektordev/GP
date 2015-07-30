@@ -9,7 +9,9 @@ import GRPCommon
 import PartitioningProblem
 import GRPMath
 
---TODO: there's probably a gaussian somewhere on hackage already.
+--There should really be some unit-tests or so here.
+--Currently, all this file does is monitor the means and variances of the fitness values of various act functions.
+--This is so the parameters for the fitness checks of actual genomes can be validated to be reasonably accurate.
 
 test :: IO ()
 test = do
