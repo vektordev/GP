@@ -126,7 +126,7 @@ initializeSeed path = do
 
 showPool (Pool _ _ _ ags _) = do
   putStrLn "\n\n\n"
-  _ <- sequence $ map (\(AgentStats path fitness _ gen _ _ evalCh compCh)
+  _ <- mapM (\(AgentStats path fitness _ gen _ _ evalCh compCh)
     -> putStrLn ( path ++ "; fitness: " ++ (show fitness) ++ " from generation " ++ (show gen) ++ "; ratio: " ++ (show (compCh, evalCh))) ) ags
   putStrLn "\n\n\n"
   return ()
@@ -141,22 +141,24 @@ showPool (Pool _ _ _ ags _) = do
 cartesianProduct :: Pool -> IO ([FilePath], Pool)
 cartesianProduct (Pool max f id agents oldags) = do
   let coderSourcePairs = [(coder, source) | coder <- agents, source <- agents]
-  children <- sequence $ map (\(genomeID, (c, s)) -> createChild c s genomeID) $ zip [id..] coderSourcePairs
+  children <- mapM (\(genomeID, (c, s)) -> createChild c s genomeID) $ zip [id..] coderSourcePairs
   return $ (rights children, Pool max f (id + length coderSourcePairs) ((lefts children) ++ agents) oldags)
 
 --I don't particularly like this style. All the lets are disturbing.
 --Possible remedy: Use the algorithm in GRPMath
 refillPool :: Pool -> IO ([FilePath], Pool)
 refillPool (Pool max f id agents oldags) = do
-  let tokens = max - length agents
-  let parentFit = sortBy (compare `on` snd ) $ map (\ag -> (ag, getAggregateFitness ag) ) agents
-  let sumOfFits = sum $ snd $ unzip parentFit
-  let tokenPerFit = (fromIntegral tokens) / sumOfFits
-  let agTokens = map (\ (ag, fit) -> (ag, round( tokenPerFit * fit ) ) ) parentFit
-  let parents = concatMap (\ (ag, tok) -> replicate tok ag) agTokens
   --TODO: We can generate each genome's children sequentially, and can do that in parallel for all the parent genomes..
-  children <- sequence (map (\(p, id) -> createChild p p id) $ zip parents [id..])
+  children <- mapM (\(p, id) -> createChild p p id) $ zip parents [id..]
   return $ (rights children, Pool max f (id + length parents) ((lefts children) ++ agents) oldags)
+  where
+    tokens = max - length agents
+    parentFit = sortBy (comparing snd ) $ map (\ag -> (ag, getAggregateFitness ag) ) agents
+    sumOfFits = sum $ map snd parentFit
+    tokenPerFit = (fromIntegral tokens) / sumOfFits
+    agTokens = map (\ (ag, fit) -> (ag, round( tokenPerFit * fit ) ) ) parentFit
+    parents = concatMap (\ (ag, tok) -> replicate tok ag) agTokens
+
 --Very basic approach: each leftover parent generates children, starting with the best, until all slots are filled.
 --More sophisticated methods with certain biases for genetic diversity and better fitness values need to be tested.
 
