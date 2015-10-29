@@ -21,6 +21,7 @@ import Data.List
 import Data.Either
 import Data.Function
 import Data.Tree
+import Data.Ord
 
 import Control.Applicative
 import Control.Concurrent.ParallelIO.Global
@@ -144,7 +145,6 @@ cartesianProduct (Pool max f id agents oldags) = do
   children <- mapM (\(genomeID, (c, s)) -> createChild c s genomeID) $ zip [id..] coderSourcePairs
   return $ (rights children, Pool max f (id + length coderSourcePairs) ((lefts children) ++ agents) oldags)
 
---I don't particularly like this style. All the lets are disturbing.
 --Possible remedy: Use the algorithm in GRPMath
 refillPool :: Pool -> IO ([FilePath], Pool)
 refillPool (Pool max f id agents oldags) = do
@@ -180,7 +180,7 @@ createChild codeAg@(AgentStats path fit ancestry generation state _ _ _) (AgentS
     dump <- System.IO.Strict.readFile (destname ++ ".stat")
     return $ Left $ read dump
   else
-    if (code == ExitFailure 124) then do
+    if (code == ExitFailure 124) then do --error code of timeout
       putStrLn ("the genome " ++ (show path) ++ " hit timeout when generating!")
       --Maybe, this is the place to heuristically detect infinilooping programs.
       return $ Right path --I would really like to punish this way more!

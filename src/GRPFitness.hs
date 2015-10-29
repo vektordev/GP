@@ -1,6 +1,6 @@
 module GRPFitness
 ( Fitness
-, Level(Unchecked, Unsafe, UnkownCompilerError, Compilation)
+, Level(Unchecked, Unsafe, UnknownCompilerError, Compilation)
 , computeProblemFitness
 , computeFitness
 ) where
@@ -20,7 +20,7 @@ import PartitioningProblem
   computeFitness is called by GRPCore and ensures safety properties of the source code and then compiles the genome.
 -}
 
-data Level = Unchecked | Unsafe | UnkownCompilerError | Compilation deriving (Show, Read, Eq, Ord)
+data Level = Unchecked | Unsafe | UnknownCompilerError | Compilation deriving (Show, Read, Eq, Ord)
 --first one is the "fitness level" that was achieved. Second one is the score within that level.
 --For most of the levels, this will be const 0, until fine grained detail in those areas is required.
 type Fitness = (Level, Float)
@@ -71,4 +71,4 @@ computeProblemFitness actFnc agState = do
 
 --This needs to aggregate the errors and process them.
 compileErrorFitness :: String -> String -> (Fitness, [(Int, String)])
-compileErrorFitness out err = trace ("Unknown compiler error: " ++ err) ((UnkownCompilerError,0.0),[])
+compileErrorFitness out err = trace ("Unknown compiler error: " ++ err) ((UnknownCompilerError,0.0),[])

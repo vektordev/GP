@@ -8,16 +8,19 @@ import GRPSeed as Genome
 
 import System.IO.Strict(readFile)
 
+import GRPIndividual
 import GRPFitness
-import System.Random
 import GRPCommon
-import System.Environment
-import Debug.Trace
 import GRPStats
 import GRPSafety
+
 import Data.Maybe (fromJust)
+
 import Debug.Trace
+
+import System.Random
 import System.Directory
+import System.Environment
 
 --This whole file is a hack. Once System.Plugin does as I please, this will not be needed.
 
@@ -34,36 +37,36 @@ main = do
   args <- getArgs
   putStrLn $ show args
   let statFile = (args !! 1) ++ ".stat"
-  if head args == "-e" then evolve statFile (args !! 1) (args !! 2) else fitnessEval stateFile
+  if head args == "-e" then evolve statFile (args !! 1) (args !! 2) else fitnessEval statFile
 
 fitnessEval :: FilePath -> IO()
-fitnessEval stateFile =
+fitnessEval statFile = do
   putStrLn "fitness was called"
   file <- System.IO.Strict.readFile statFile
-  let oldStats = read file :: AgentStats
-  (newFit, newState) <- computeProblemFitness Genome.act (state oldStats)
+  let oldStats = read file :: Individual
+  (newFit, newState) <- computeProblemFitness Genome.act []
   putStrLn ("newFit = " ++ show newFit)
-  let newStats = AgentStats (source oldStats) (Compilation, newFit) (ancestry oldStats) (generation oldStats) newState False (evaluatedChildren oldStats) (compiledChildren oldStats) :: AgentStats
+  let newStats = setFitness oldStats (Compilation, newFit)--AgentStats (source oldStats) (Compilation, newFit) (ancestry oldStats) (generation oldStats) newState False (evaluatedChildren oldStats) (compiledChildren oldStats) :: AgentStats
   writeFile (statFile ++ "~") $show newStats
   renameFile (statFile ++ "~") statFile
   --TODO2: verify correct copying
-
 
 evolve :: FilePath -> FilePath -> FilePath -> IO()
 evolve parentStatFile srcFile newFileName = do
   putStrLn "ev was called"
   putStrLn "stuff"
   pStatString <- System.IO.Strict.readFile parentStatFile
-  let pStat = read pStatString :: AgentStats
+  let pStat = read pStatString :: Individual
   src <- System.IO.Strict.readFile srcFile
   rng <- newStdGen
-  let (newCode, newState) = reprogram [rng] (state pStat) [fromJust $ dropSafetyPrefix src]
+  let (newCode, newState) = reprogram [rng] [] [fromJust $ dropSafetyPrefix src]
   if newCode == ( fromJust $ dropSafetyPrefix src ) -- primitive external duplicate Control, Mk. 2
   then do
     putStrLn "Welp! That's a duplicate!"
-    undefined --TODO: This is possibly a bit hacky.
+    undefined --TODO: This is possibly a bit hacky. At least I can tell from the error message.
   else do
+    --newState will, at some point, have to be written back.
     writeFile newFileName ("--{-# LANGUAGE Safe #-}\nmodule " ++ (reverse $ drop 3 $ reverse newFileName) ++ "\n" ++ (unlines $ drop 2 $ lines $ fromJust $ getSafetyPrefix src) ++ newCode)
-    let stats = AgentStats ("./" ++ newFileName) (Unchecked, 0.0) (createAncestry pStat) (1+ generation pStat) [] False 0 0 :: AgentStats
+    let stats = ActiveI (Unchecked, 0.0) newFileName -- (createAncestry pStat) (1+ generation pStat) [] False 0 0 :: AgentStats
     writeFile (newFileName ++ ".stat") $ show stats
     putStrLn "ev terminated"

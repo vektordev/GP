@@ -1,12 +1,12 @@
 --{-# LANGUAGE Safe #-}
---Best to compile results of this as Safe if the code gen has sufficient freedom.
-
 module GRPSeed
 ( act
 , reprogram
 , initial
 --, reinforcement
 ) where
+
+--Best to compile results of this as Safe if the code gen has sufficient freedom.
 
 import System.Random
 import Data.Maybe (isJust, fromJust)
