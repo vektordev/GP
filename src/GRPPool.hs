@@ -19,6 +19,8 @@ import Data.Maybe
 import Data.Ord
 import Data.List
 
+import Control.Monad
+
 --currently supports only one single root node. This can be changed later on.
 --no State currently within Individual.
 --
@@ -101,9 +103,38 @@ createAllChildren iTree tTree = do
   upd <- zipperCreateAll (fromTree iTree)(fromTree tTree)
   return $ toTree upd
 
+--needs to iterate over all children off the two treePos.
+--Then, call createChild as often as required by root ticket node.
+--recursion scheme: Call leftmost child.
+--Return val ensures that all children and transitive children have been dealt with.
+--Then, recurse on right brother if possible.
+--Call createChild on self with required tickets.
+--Important: Self-call in last place to ensure no new children have been created to call on.
 zipperCreateAll :: TreePos Full Individual -> TreePos Full [(Int, Maybe FilePath)] -> IO(TreePos Full Individual)
-zipperCreateAll indZipper ticketZipper = return indZipper
+zipperCreateAll indZipper ticketZipper = do
+  lowerRec <-
+    if hasChildren indZipper
+    then liftM
+      (\x -> fromJust $ parent x)
+      (zipperCreateAll
+        (fromJust $ firstChild indZipper)
+        (fromJust $ firstChild ticketZipper))
+    else return $ indZipper
+  rightRec <-
+    if not $ isLast lowerRec
+    then liftM (fromJust . prev) $ zipperCreateAll (fromJust $ next lowerRec) (fromJust $ next ticketZipper)
+    else return lowerRec
+  zipperCreateLocal rightRec (label ticketZipper)
 
+zipperCreateLocal :: TreePos Full Individual -> [(Int, Maybe FilePath)] -> IO (TreePos Full Individual)
+zipperCreateLocal t [] = return t
+zipperCreateLocal tree ((i, Nothing):ts) =
+  if isNothing $ path $ label tree
+  then zipperCreateLocal tree ts
+  else createChild tree i (fromJust $ path $ label tree) >>= flip zipperCreateLocal ts
+zipperCreateLocal tree ((i, Just path):ts) = createChild tree i path >>= flip zipperCreateLocal ts
+
+--handles insertion into tree and failure of -e process.
 createChild :: TreePos Full Individual -> Int -> FilePath -> IO(TreePos Full Individual)
 createChild loc id srcCode = do
   let
@@ -117,7 +148,7 @@ createChild loc id srcCode = do
           generate ("GRPGenome" ++ show id)
           return [Node (ActiveI (Unchecked, 0.0) ("GRPGenome" ++ show id)) []]
         else return []
-  newElem <- mkChild (rootLabel $ tree loc) id srcCode
+  newElem <- mkChild (rootLabel $ tree loc) id srcCode -- rootlabel . tree == label ?
   return (modifyTree (\(Node a subnodes) -> Node a (newElem ++ subnodes)) loc)
 
 --this function is going to become tricky later on. Right now, it's just a plain old
@@ -154,7 +185,7 @@ evalIndividual (ActiveI (Unchecked, val) path) = do
       putStrLn "exit failure"
       print (code, out, err)
       --System.Directory.removeFile (path ++".hs.stat")
-      return (ActiveI (Compilation, -1.0 * (2^64)) path)
+      return (ActiveI (Compilation, -1.0 * (2^120)) path)
   else return (ActiveI fitVal path)
 --Marking individuals as inactive shouldn't be done here.
 evalIndividual indiv = return indiv

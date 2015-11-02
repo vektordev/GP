@@ -1,6 +1,7 @@
 module GRPIndividual
 ( Individual(JunkI, ActiveI, InactiveI)
 , getFitness
+, path
 , setFitness
 , updateIndividual
 , removeJunk
@@ -20,6 +21,10 @@ instance Ord Individual where
 getFitness (JunkI f)       = f
 getFitness (ActiveI f _)   = f
 getFitness (InactiveI f _) = f
+
+path (JunkI f) = Nothing
+path (ActiveI f p) = Just p
+path (InactiveI f p) = Just p
 
 setFitness :: Individual -> Fitness -> Individual
 setFitness (JunkI f) f' = JunkI f'
