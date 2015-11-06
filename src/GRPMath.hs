@@ -23,29 +23,31 @@ variance lst =
 --How to assign a number of tickets to a list of weights?
 --TODO: This needs to be incorporated into GRPCore.
 --weightedAssign :: Int -> [Double] -> [Int]
-weightedAssign n weights = fmap
-  (\wt -> floor (wt * searchWeight 0.0 10000.0 n weights) )
-  weights
+weightedAssign n weights =
+  let sw = searchWeight 0.0 10000.0 n weights
+  in fmap
+    (\wt -> floor (wt * sw) )
+    weights
 
 --I'd rather this be double, but that forces double upon fitness.
 --Refactoring not worth it currently.
 epsilon :: Float
-epsilon = 0.00001
+epsilon = 0.0000001
 --in case there's no perfect division (most likely in case of exact multiples,
 --which is not likely), fewer tokens will be assigned.
 
 --searchWeight :: Double -> Double -> Int -> [Double] -> Double
 searchWeight low high n weights =
   if high - low < epsilon
-  then low
+  then trace ("Search weight: " ++ show low) low
   else
     let midCnt = (getTotal ((low+high)/2) weights)
     in if midCnt == n
-    then ((low+high)/2)
+    then trace ("Search weight: " ++ show ((low+high)/2)) ((low+high)/2)
     else
       if midCnt > n
-      then trace (show low  ++ ";" ++ show high) $ searchWeight low ((low+high)/2) n weights
-      else trace (show low ++ show high) $ searchWeight ((low+high)/2) high n weights
+      then searchWeight low ((low+high)/2) n weights
+      else searchWeight ((low+high)/2) high n weights
 
 --getTotal :: (Integral a, RealFrac r) => r -> [r] -> a
 getTotal numPerWeight weights = sum $ fmap

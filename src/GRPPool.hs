@@ -18,6 +18,7 @@ import Data.Tree.Zipper
 import Data.Maybe
 import Data.Ord
 import Data.List
+import Data.Traversable
 
 import Control.Monad
 
@@ -49,19 +50,32 @@ data Pool = Pool {
 
 filterPool :: Pool -> Pool
 filterPool (Pool max min nID population) =
-  if length (flatten population) > min
+  if length (filter (\i -> case i of JunkI _ -> False; _ -> True) $ flatten population) > min
   then Pool max min nID updatedPopulation
   else Pool max min nID updatedPopulation'
   where
     updatedPopulation' = fmap removeJunk population
-    threshold          = getFitness $ (!!) (sortBy (flip compare) (flatten population)) min
+    threshold          = getFitness $ (!!) (sortBy (flip compare) (flatten population)) (min - 1)
     updatedPopulation  = fmap (updateIndividual threshold) updatedPopulation'
 
 main = do
   putStrLn "Starting test run."
   ip <- initialPool
-  newPool <- iteratePool ip 5
+  newPool <- iteratePool ip 20
   putStrLn "Done!"
+
+poolSummary :: Pool -> IO ()
+poolSummary p = do
+  let genP = flatten $ genomes p
+  putStrLn "pool Summary:"
+  putStrLn $ drawTree $ fmap show $ genomes p
+  --print $ length $ genomes p
+  putStrLn "-+-+-+-+-+-+-+-+-+-+-+-+-+-"
+  print $ filter (\i -> case i of
+    ActiveI (Compilation, f) p -> True;
+    InactiveI (Compilation, f) p -> True;
+    _ -> False) genP  --(\i -> case i of JunkI _ -> False; InactiveI _ _ -> False; ActiveI Compilatio p -> ) genP
+  putStrLn "---\n"
 
 initialPool :: IO Pool
 initialPool = do
@@ -69,32 +83,40 @@ initialPool = do
   writeFile "./GRPGenome0.hs" ("--{-# LANGUAGE Safe #-}\nmodule GRPGenome0\n" ++ unlines ( drop 2 $ lines src))
   generate "./GRPGenome0.hs"
   --This function does NOT write .stat to disk. This is done before calls to the executable.
-  return (Pool 100 10 1 (Node (ActiveI (Unchecked, 0.0) "./GRPGenome0") []))
+  return (Pool 10 1 1 (Node (ActiveI (Unchecked, 0.0) "./GRPGenome0") []))
 
 iteratePool :: Pool -> Int -> IO Pool
 iteratePool p 0 = return p
 iteratePool p it = do
   putStrLn "Starting iteration: "
-  print p
+  poolSummary p
   ep <- evaluateFitness p
-  print ep
+  poolSummary ep
   let fp = filterPool ep
-  print fp
+  poolSummary fp
   rp <- refillPool fp
-  print rp
+  poolSummary rp
   iteratePool rp (it-1)
 
 --cartesianProduct :: Pool -> IO Pool
 
 refillPool :: Pool -> IO Pool
 refillPool (Pool max min nxt genomes) = do
-  let size = length $ flatten genomes
+  let size = length $ filter (\i -> case i of ActiveI _ _ -> True; _ -> False) $ flatten genomes
   let newGenomesCnt = max - size
+  let tickets = [nxt .. nxt + newGenomesCnt - 1]
   --We definitely need to preprocess the fitness value
   -- - bare as they are, they're not really good for that purpose
-  --negative weights are particularly bad.
-  let tickets = weightedAssign newGenomesCnt (fmap (abs . snd . getFitness) genomes)
-  return $ Pool max min nxt genomes
+  --negative weights are particularly bad. Thus: Absolute value, just to be sure.
+  let wtNodes = weightedAssign newGenomesCnt (fmap (\i -> case i of ActiveI (Compilation,f) _ -> abs f; _ -> 0) genomes)
+  let ticketnodes = fmap (\x -> zip x (repeat Nothing) ) $ assignTickets wtNodes tickets
+  newGenomes <- createAllChildren genomes ticketnodes
+  return $ Pool max min (nxt + newGenomesCnt) newGenomes
+
+--assignTickets :: Tree Int -> [Int] -> Tree [Int]
+assignTickets tree tickets =
+  let (x, ticketNodes) = mapAccumR (\tickets weight -> if length tickets < weight then error "Too few tickets in assignTickets" else (drop weight tickets, take weight tickets)) tickets tree
+  in if null x then ticketNodes else error "Too many tickets in assignTickets"
 
 createAllChildren :: Tree Individual -> Tree [(Int, Maybe FilePath)] -> IO (Tree Individual)
 --general idea: To zipper, iterate. Recurse on leftmost child, add own children if applicable.
@@ -115,11 +137,11 @@ zipperCreateAll indZipper ticketZipper = do
   lowerRec <-
     if hasChildren indZipper
     then liftM
-      (\x -> fromJust $ parent x)
+      (fromJust . parent)
       (zipperCreateAll
         (fromJust $ firstChild indZipper)
         (fromJust $ firstChild ticketZipper))
-    else return $ indZipper
+    else return indZipper
   rightRec <-
     if not $ isLast lowerRec
     then liftM (fromJust . prev) $ zipperCreateAll (fromJust $ next lowerRec) (fromJust $ next ticketZipper)
@@ -129,9 +151,9 @@ zipperCreateAll indZipper ticketZipper = do
 zipperCreateLocal :: TreePos Full Individual -> [(Int, Maybe FilePath)] -> IO (TreePos Full Individual)
 zipperCreateLocal t [] = return t
 zipperCreateLocal tree ((i, Nothing):ts) =
-  if isNothing $ path $ label tree
-  then zipperCreateLocal tree ts
-  else createChild tree i (fromJust $ path $ label tree) >>= flip zipperCreateLocal ts
+  case path $ label tree of
+    Nothing -> zipperCreateLocal tree ts
+    Just x ->createChild tree i x >>= flip zipperCreateLocal ts
 zipperCreateLocal tree ((i, Just path):ts) = createChild tree i path >>= flip zipperCreateLocal ts
 
 --handles insertion into tree and failure of -e process.
@@ -141,12 +163,12 @@ createChild loc id srcCode = do
     mkChild ind@(ActiveI fit path) id srcCode = do
       writeFile (path ++ ".hs.stat") $show ind
       (code, out, err) <- readProcessWithExitCode "timeout"
-        ["1s", path ++ "hl", "-e", srcCode ++ ".hs", "./GRPGenome" ++ show id ++ ".hs"] ""
+        ["1s", path ++ "hl", "-e", srcCode ++ ".hs", "GRPGenome" ++ show id ++ ".hs"] ""
       System.Directory.removeFile (path ++ ".hs.stat") --state would be lost here
       if code == ExitSuccess
         then do
-          generate ("GRPGenome" ++ show id)
-          return [Node (ActiveI (Unchecked, 0.0) ("GRPGenome" ++ show id)) []]
+          generate ("GRPGenome" ++ show id ++ ".hs")
+          return [Node (ActiveI (Unchecked, 0.0) ("./GRPGenome" ++ show id)) []]
         else return []
   newElem <- mkChild (rootLabel $ tree loc) id srcCode -- rootlabel . tree == label ?
   return (modifyTree (\(Node a subnodes) -> Node a (newElem ++ subnodes)) loc)
@@ -182,7 +204,7 @@ evalIndividual (ActiveI (Unchecked, val) path) = do
       System.Directory.removeFile (path ++".hs.stat")
       return (ActiveI newFit path)
     else do
-      putStrLn "exit failure"
+      putStrLn "exit failure in eval"
       print (code, out, err)
       --System.Directory.removeFile (path ++".hs.stat")
       return (ActiveI (Compilation, -1.0 * (2^120)) path)

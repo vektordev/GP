@@ -67,6 +67,7 @@ evolve parentStatFile srcFile newFileName = do
   else do
     --newState will, at some point, have to be written back.
     writeFile newFileName ("--{-# LANGUAGE Safe #-}\nmodule " ++ (reverse $ drop 3 $ reverse newFileName) ++ "\n" ++ (unlines $ drop 2 $ lines $ fromJust $ getSafetyPrefix src) ++ newCode)
-    let stats = ActiveI (Unchecked, 0.0) newFileName -- (createAncestry pStat) (1+ generation pStat) [] False 0 0 :: AgentStats
-    writeFile (newFileName ++ ".stat") $ show stats
+    --The following .stat file won't offer new info. Just return to confirm termination.
+    --let stats = ActiveI (Unchecked, 0.0) ("./" ++ newFileName) -- (createAncestry pStat) (1+ generation pStat) [] False 0 0 :: AgentStats
+    --writeFile (newFileName ++ ".stat") $ show stats
     putStrLn "ev terminated"

@@ -67,7 +67,11 @@ computeProblemFitness actFnc agState = do
   input <- generateInput 20
 --TODO: Measure time the agent took to compute the result
   let (out, newSt) = actFnc [rng] agState input
-  return (fitness input out, newSt)
+  return (normalizeFitness input $ fitness input out, newSt)
+
+normalizeFitness :: Input -> Float -> Float
+normalizeFitness input raw =
+  (raw - worstScore input) / (bestScore input - worstScore input)
 
 --This needs to aggregate the errors and process them.
 compileErrorFitness :: String -> String -> (Fitness, [(Int, String)])

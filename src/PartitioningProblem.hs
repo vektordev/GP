@@ -1,6 +1,8 @@
 module PartitioningProblem
 ( fitness
 , generateInput
+, worstScore
+, bestScore
 ) where
 
 import Data.List
@@ -23,3 +25,10 @@ generateInput n = do
   x <- getStdRandom next
   xs <- generateInput (n-1)
   return (x:xs)
+
+worstScore :: Input -> Float
+worstScore [] = 0
+worstScore (i:inp) = - ((fromIntegral $ abs $ length (i:inp)) * (fromIntegral $ snd $ genRange $ mkStdGen 0))
+
+bestScore :: Input -> Float
+bestScore _ = 0
