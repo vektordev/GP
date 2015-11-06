@@ -26,19 +26,26 @@ import Control.Monad
 --no State currently within Individual.
 --
 --this needs to support:
---  toDotFile - trivial
+-- +  toDotFile - trivial
 --  iteratePool - agnostic of internal structure
 --  initialPool - trivial
---  showPool - map?
---  cartesianProduct - rather easy, needs insertion of node
+-- +  showPool - map?
+-- +  cartesianProduct - rather easy, needs insertion of node
 --  refillPool - bit complicated, needs insertion of node
 --    insertion of node
 --  evaluateFitness - plain old map
 --
+--  Inactive Individuals can become active again if a ActiveI's effective value
+--    (after accounting for ancestral context) decreases over time.
+--    Thus, they need to keep their info to some degree.
+--    The amount of InactiveIs we keep as not-Junk is probably a tweakable parameter.
+--    However, bounds of it can be estimated by looking at
+--    the frequency of "revivals." vs "births"
+--
 --in order to be able to truncate the top of the ancestry tree safely while
 --maintaining nice properties (same behavior as without truncating),
 --we need to ensure that the truncated parts cannot become better than the
---currently active part of the pool.
+--currently active part of the pool. Also, they should be too far away from any active
 
 data Pool = Pool {
   maxSize :: Int,
@@ -48,34 +55,23 @@ data Pool = Pool {
   genomes :: Tree Individual
 } deriving (Show, Read)
 
-filterPool :: Pool -> Pool
+filterPool :: Pool -> (Pool, [String])
 filterPool (Pool max min nID population) =
   if length (filter (\i -> case i of JunkI _ -> False; _ -> True) $ flatten population) > min
-  then Pool max min nID updatedPopulation
-  else Pool max min nID updatedPopulation'
+  then (Pool max min nID updatedPopulation  , fileremovals)
+  else (Pool max min nID updatedPopulation' , fileremovals)
   where
-    updatedPopulation' = fmap removeJunk population
+    (updPopAndFileRemovals) = fmap removeJunk population
+    updatedPopulation' = fmap fst updPopAndFileRemovals
+    fileremovals = flatten $ fmap snd updPopAndFileRemovals
     threshold          = getFitness $ (!!) (sortBy (flip compare) (flatten population)) (min - 1)
     updatedPopulation  = fmap (updateIndividual threshold) updatedPopulation'
 
 main = do
   putStrLn "Starting test run."
   ip <- initialPool
-  newPool <- iteratePool ip 20
+  newPool <- iteratePool ip 5
   putStrLn "Done!"
-
-poolSummary :: Pool -> IO ()
-poolSummary p = do
-  let genP = flatten $ genomes p
-  putStrLn "pool Summary:"
-  putStrLn $ drawTree $ fmap show $ genomes p
-  --print $ length $ genomes p
-  putStrLn "-+-+-+-+-+-+-+-+-+-+-+-+-+-"
-  print $ filter (\i -> case i of
-    ActiveI (Compilation, f) p -> True;
-    InactiveI (Compilation, f) p -> True;
-    _ -> False) genP  --(\i -> case i of JunkI _ -> False; InactiveI _ _ -> False; ActiveI Compilatio p -> ) genP
-  putStrLn "---\n"
 
 initialPool :: IO Pool
 initialPool = do
@@ -85,6 +81,18 @@ initialPool = do
   --This function does NOT write .stat to disk. This is done before calls to the executable.
   return (Pool 10 1 1 (Node (ActiveI (Unchecked, 0.0) "./GRPGenome0") []))
 
+poolSummary :: Pool -> IO ()
+poolSummary p = do
+  let genP = flatten $ genomes p
+  putStrLn "pool Summary:"
+  putStrLn $ drawTree $ fmap show $ genomes p
+  putStrLn "-+-+-+-+-+-+-+-+-+-+-+-+-+-"
+  print $ filter (\i -> case i of
+    ActiveI (Compilation, f) p -> True;
+    InactiveI (Compilation, f) p -> True;
+    _ -> False) genP  --(\i -> case i of JunkI _ -> False; InactiveI _ _ -> False; ActiveI Compilatio p -> ) genP
+  putStrLn "---\n"
+
 iteratePool :: Pool -> Int -> IO Pool
 iteratePool p 0 = return p
 iteratePool p it = do
@@ -92,11 +100,20 @@ iteratePool p it = do
   poolSummary p
   ep <- evaluateFitness p
   poolSummary ep
-  let fp = filterPool ep
+  let (fp, rmpaths) = filterPool ep
+  cleanup rmpaths
   poolSummary fp
   rp <- refillPool fp
   poolSummary rp
   iteratePool rp (it-1)
+
+cleanup :: [String] -> IO()
+cleanup [] = return ()
+cleanup ("":xs) = cleanup xs
+cleanup (x:xs) = do
+  System.Directory.removeFile (x ++".hs")
+  System.Directory.removeFile (x ++"hl.hs")
+  cleanup xs
 
 --cartesianProduct :: Pool -> IO Pool
 

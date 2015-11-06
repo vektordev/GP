@@ -37,7 +37,8 @@ updateIndividual thres (JunkI     f)      = JunkI f
 updateIndividual thres (ActiveI   f path) = if f >= thres then ActiveI f path else InactiveI f path
 updateIndividual thres (InactiveI f path) = if f >= thres then ActiveI f path else InactiveI f path
 
-removeJunk :: Individual -> Individual
-removeJunk ind@(ActiveI (Compilation, f2) p) = ind
-removeJunk ind@(InactiveI (Compilation, f2) p) = ind
-removeJunk ind = JunkI $ getFitness ind
+removeJunk :: Individual -> (Individual, String)
+removeJunk ind@(ActiveI (Compilation, f2) p) = (ind, "")
+removeJunk ind@(InactiveI (Compilation, f2) p) = (ind, "")
+removeJunk ind@(JunkI p) = (ind, "")
+removeJunk ind@(ActiveI (_, f) p) = (JunkI $ getFitness ind, p)
