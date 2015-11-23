@@ -119,6 +119,7 @@ processArgs _ = putStrLn "invalid operands"
 
 output :: Pool -> IO()
 output p = do
+  writeFile (getUniqueName p ++ "-fitness") $ unlines $ map show $ sortBy (comparing getFitness) $ flatten $ genomes p
   writeFile (getUniqueName p ++ "-features") $ getFormattedFeatureDump p
   writeFile (getUniqueName p ++ ".dot") $ getDotFile p
 
@@ -184,15 +185,11 @@ iteratePool :: Int -> [String] -> Pool -> IO Pool
 iteratePool 0 options p = return p
 iteratePool it options p = do
   --TODO: Change order of these operations.
-  putStrLn "Starting iteration: "
-  poolSummary p
+  putStrLn "Starting iteration"
   ep <- evaluateFitness p
-  poolSummary ep
   let (fp, rmpaths) = filterPool ep
   cleanup rmpaths
-  poolSummary fp
   rp <- refillPool fp
-  poolSummary rp
   iteratePool (it-1) options rp{iterations = iterations rp +1}
 
 getFormattedFeatureDump :: Pool -> String
@@ -210,6 +207,7 @@ getID loc = case label loc of
   InactiveI  id (Compilation, _) name -> read $ filter (\c -> c `elem` ['0'..'9']) name
   _ -> -1
 
+--TODO: Refactor this mess:
 getFeatures :: TreePos Full Individual -> Maybe FeatureVec
 getFeatures zipperLoc = case label zipperLoc of
   ActiveI id (Compilation, fit) path -> Just (FeatureVec

@@ -7,8 +7,10 @@ module GRPFitness
 
 import System.Exit (ExitCode(..))
 
+import Data.List
+
 import GRPSafety
---import Debug.Trace
+import Debug.Trace
 import System.Process (readProcessWithExitCode, createProcess, shell)
 import System.Random
 import GRPCommon
@@ -20,7 +22,7 @@ import PartitioningProblem
   computeFitness is called by GRPCore and ensures safety properties of the source code and then compiles the genome.
 -}
 
-data Level = Unchecked | Unsafe | UnknownCompilerError | Compilation deriving (Show, Read, Eq, Ord)
+data Level = Unchecked | Unsafe | ParseErr | ScopeErr | AmbiguousSymbolErr | TypeErr | NoBindingError | UnknownCompilerError | Compilation deriving (Show, Read, Eq, Ord)
 --first one is the "fitness level" that was achieved. Second one is the score within that level.
 --For most of the levels, this will be const 0, until fine grained detail in those areas is required.
 type Fitness = (Level, Float)
@@ -30,7 +32,7 @@ type Fitness = (Level, Float)
 fitOut :: String -> IO()
 fitOut str = return ()
 
-trace str x = x --temporarily mute the trace calls
+--trace str x = x --temporarily mute the trace calls
 
 -- source code -> assigned future filepath ->
 -- Fitness Value and a list of errors to point out to the parent (and their magnitude)
@@ -75,4 +77,11 @@ normalizeFitness input raw =
 
 --This needs to aggregate the errors and process them.
 compileErrorFitness :: String -> String -> (Fitness, [(Int, String)])
-compileErrorFitness out err = trace ("Unknown compiler error: " ++ err) ((UnknownCompilerError,0.0),[])
+compileErrorFitness out err
+  | "No instance for" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)), [])
+  | "lacks an accompanying binding" `isInfixOf` err = ((NoBindingError, -(fromIntegral $ length err)),[])
+  | "Ambiguous occurence" `isInfixOf` err = ((AmbiguousSymbolErr, -(fromIntegral $ length err)),[])
+  | "Couldn't match" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)),[])
+  | "parse error" `isInfixOf` err = ((ParseErr, -(fromIntegral $ length err)),[])
+  | "Not in scope" `isInfixOf` err = ((ScopeErr, -(fromIntegral $ length err)),[])
+  | otherwise = trace ("Unknown compiler error: " ++ err) ((UnknownCompilerError, -(fromIntegral $ length err)),[])
