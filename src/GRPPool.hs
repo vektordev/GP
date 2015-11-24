@@ -244,7 +244,7 @@ refillPool (Pool name it max min nxt genomes) = do
   -- - bare as they are, they're not really good for that purpose
   --negative weights are particularly bad. Thus: Absolute value, just to be sure.
   --TODO:
-  let wtNodes = weightedAssign newGenomesCnt (fmap (\i -> case i of ActiveI _ (Compilation,f) _ -> abs f; _ -> 0) genomes)
+  let wtNodes = weightedAssign newGenomesCnt (getWeights genomes)
   let ticketnodes = fmap (\x -> zip x (repeat Nothing) ) $ assignTickets wtNodes tickets
   newGenomes <- createAllChildren genomes ticketnodes
   return $ Pool name it max min (nxt + newGenomesCnt) newGenomes
