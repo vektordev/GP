@@ -19,6 +19,7 @@ import Data.Traversable
 import Data.Ratio
 
 import Control.Monad
+import Control.Concurrent.ParallelIO.Global
 
 --currently supports only one single root node. This can be changed later on.
 --no State currently within Individual.
@@ -82,26 +83,15 @@ data FeatureVec = FeatureVec {
 , parentid :: Int
 , fitness :: Float
 , fitnessGainSinceParent :: Float
-, compilationRate :: Ratio Int
+, compilationRate :: Ratio Integer
 , children :: Int
 , avgChildFit :: Float
 } deriving (Show, Read)
 
-filterPool :: Pool -> (Pool, [String])
-filterPool (Pool name it max min nID population) =
-  if length (filter (\i -> case i of JunkI _ _ -> False; _ -> True) $ flatten population) > min
-  then (Pool name it max min nID updatedPopulation  , fileremovals)
-  else (Pool name it max min nID updatedPopulation' , fileremovals)
-  where
-    (updPopAndFileRemovals) = fmap removeJunk population
-    updatedPopulation' = fmap fst updPopAndFileRemovals
-    fileremovals = flatten $ fmap snd updPopAndFileRemovals
-    threshold          = getFitness $ (!!) (sortBy (flip compare) (flatten population)) (min - 1)
-    updatedPopulation  = fmap (updateIndividual threshold) updatedPopulation'
-
 main = do
   args <- getArgs
   processArgs args
+  stopGlobalPool --stops the thread pool
 
 --syntax: --start m n name --iterations i --no-output
 --syntax: --load path --iterations 0
@@ -112,9 +102,6 @@ processArgs ("--start" : max : min : name : "--iterations" : it : options) =
   initialPool (read max) (read min) name >>= runPool (read it) options
 processArgs ("--load"  : path             : "--iterations" : it : options) =
   loadFromFile path                      >>= runPool (read it) options
---processArgs ("--start": iterations: max: min: flags) =
---processArgs ("--continue": iterations: flags) =
---processArgs ("--output-only": flags) = loadFromFile >>= output
 processArgs _ = putStrLn "invalid operands"
 
 output :: Pool -> IO()
@@ -128,17 +115,10 @@ output p = do
 getDotFile :: Pool -> String
 getDotFile pool = unlines (["strict graph network{"] ++ edges ( genomes pool) ++ nodes ( genomes pool) ++ ["}"])
   where
-    --edges = fmap (map )(genomes pool)
     edges (Node a []) = []
     edges (Node a chdren) = concatMap edges chdren ++ (map (edge a . rootLabel) chdren)
     edge i1 i2 = 'n':(show $ GRPIndividual.getID i1) ++ "--" ++ 'n':(show $ GRPIndividual.getID i2) ++ ";"
     nodes gens = map (\gen -> 'n':((show $ GRPIndividual.getID gen) ++ "[label=" ++ (show $ show $ getFitness gen) ++ "];")) $ flatten gens
-{-
-strict graph network {
-parent -- child;
-child [label="sometext"]
-}
--}
 
 testrun :: IO()
 testrun = do
@@ -215,7 +195,7 @@ getFeatures zipperLoc = case label zipperLoc of
       (maybe (-1) Main.getID (parent zipperLoc))
       fit
       (maybe fit (\tp -> fit - (snd $ getFitness $ label tp)) (parent zipperLoc))
-      (if (length offspringC + length offspringNC) == 0 then 0%1 else (length offspringC % (length offspringC + length offspringNC)))
+      (if (length offspringC + length offspringNC) == 0 then 0%1 else ((toInteger $ length offspringC) % (toInteger $ length offspringC + length offspringNC)))
       (length offspringC + length offspringNC)
       (if null offspringC then 0 else mean $ map (snd . getFitness) offspringC)
     )
@@ -226,7 +206,7 @@ getFeatures zipperLoc = case label zipperLoc of
       (maybe (-1) Main.getID (parent zipperLoc))
       fit
       (maybe fit (\tp -> fit - (snd $ getFitness $ label tp)) (parent zipperLoc))
-      (if (length offspringC + length offspringNC) == 0 then 0%1 else (length offspringC % (length offspringC + length offspringNC)))
+      (if (length offspringC + length offspringNC) == 0 then 0%1 else ((toInteger $ length offspringC) % (toInteger $ (length offspringC + length offspringNC))))
       (length offspringC + length offspringNC)
       (if null offspringC then 0 else mean $ map (snd . getFitness) offspringC)
     )
@@ -253,7 +233,7 @@ extractFromTreeContext f as = extractChildren f $ fromTree as
 
 getWeights :: Tree Individual -> Tree Float
 getWeights individuals = fmap regress $ extractFromTreeContext getFeatures individuals
-  where regress i = maybe 0 (abs . fitness) i
+  where regress featrs = maybe 0 (\fs -> abs $ fitness fs + abs (fromRational (compilationRate fs) )) featrs
 
 refillPool :: Pool -> IO Pool
 refillPool (Pool name it max min nxt genomes) = do
@@ -329,13 +309,27 @@ createChild loc id srcCode = do
   newElem <- mkChild (rootLabel $ tree loc) id srcCode -- rootlabel . tree == label ?
   return (modifyTree (\(Node a subnodes) -> Node a (newElem ++ subnodes)) loc)
 
+filterPool :: Pool -> (Pool, [String])
+filterPool (Pool name it max min nID population) =
+  if length (filter (\i -> case i of JunkI _ _ -> False; _ -> True) $ flatten population) > min
+  then (Pool name it max min nID updatedPopulation  , fileremovals)
+  else (Pool name it max min nID updatedPopulation' , fileremovals)
+  where
+    (updPopAndFileRemovals) = fmap removeJunk population
+    updatedPopulation' = fmap fst updPopAndFileRemovals
+    fileremovals = flatten $ fmap snd updPopAndFileRemovals
+    threshold          = getFitness $ (!!) (sortBy (flip compare) (flatten population)) (min - 1)
+    --this labels individuals as inactive.
+    updatedPopulation  = fmap (updateIndividual threshold) updatedPopulation'
+
 --this function is going to become tricky later on. Right now, it's just a plain old
 --map over the tree structure, but later we'll do a traversion of the neighborhood
 --for every node considered.
 --also, Fitness is likely to not cut it anymore later on as a type.
 evaluateFitness :: Pool -> IO Pool
 evaluateFitness pool = do
-  genomes' <- sequence $ fmap evalIndividual (genomes pool)
+  let evalTree (Node a as) = do ind <-evalIndividual a; inds <- parallel $ map evalTree as; return (Node ind inds)
+  genomes' <- evalTree (genomes pool)--this should be parallel
   return (pool{genomes = genomes'})
 
 --a function :: (TreePos Individual Full -> Individual) ->
