@@ -98,14 +98,15 @@ main = do
 --syntax: --testrun
 processArgs :: [String] -> IO ()
 processArgs ["--testrun"] = testrun
-processArgs ("--start" : max : min : name : "--iterations" : it : options) =
-  initialPool (read max) (read min) name >>= runPool (read it) options
-processArgs ("--load"  : path             : "--iterations" : it : options) =
-  loadFromFile path                      >>= runPool (read it) options
+processArgs ("--start" : gain : min : name : "--iterations" : it : options) =
+  initialPool (read gain) (read min) name >>= runPool (read it) options
+processArgs ("--load"  : path              : "--iterations" : it : options) =
+  loadFromFile path                       >>= runPool (read it) options
 processArgs _ = putStrLn "invalid operands"
 
 output :: Pool -> IO()
 output p = do
+  --TODO: put a printout of regressed features here.
   writeFile (getUniqueName p ++ "-fitness") $ unlines $ map show $ sortBy (comparing getFitness) $ flatten $ genomes p
   writeFile (getUniqueName p ++ "-features") $ getFormattedFeatureDump p
   writeFile (getUniqueName p ++ ".dot") $ getDotFile p
@@ -116,14 +117,14 @@ getDotFile :: Pool -> String
 getDotFile pool = unlines (["strict graph network{"] ++ edges ( genomes pool) ++ nodes ( genomes pool) ++ ["}"])
   where
     edges (Node a []) = []
-    edges (Node a chdren) = concatMap edges chdren ++ (map (edge a . rootLabel) chdren)
+    edges (Node a chdren) = concatMap edges chdren ++ map (edge a . rootLabel) chdren
     edge i1 i2 = 'n':(show $ GRPIndividual.getID i1) ++ "--" ++ 'n':(show $ GRPIndividual.getID i2) ++ ";"
     nodes gens = map (\gen -> 'n':((show $ GRPIndividual.getID gen) ++ "[label=" ++ (show $ show $ getFitness gen) ++ "];")) $ flatten gens
 
 testrun :: IO()
 testrun = do
   putStrLn "Starting test run."
-  ip <- initialPool 100 3 "defaultTest"
+  ip <- initialPool 100 50 "defaultTest"
   runPool 3 [] ip
   putStrLn "Done!"
 
@@ -139,12 +140,12 @@ loadFromFile path = do
   return $ read str
 
 initialPool :: Int -> Int -> String -> IO Pool
-initialPool max min name = do
+initialPool gain min name = do
   src <- System.IO.Strict.readFile "./GRPSeed.hs"
   writeFile "./GRPGenome0.hs" ("--{-# LANGUAGE Safe #-}\nmodule GRPGenome0\n" ++ unlines ( drop 2 $ lines src))
   generate "./GRPGenome0.hs"
   --This function does NOT write .stat to disk. This is done before calls to the executable.
-  return (Pool name 0 max min 1 (Node (ActiveI 0 (Unchecked, 0.0) "./GRPGenome0") []))
+  return (Pool name 0 gain min 1 (Node (ActiveI 0 (Unchecked, 0.0) "./GRPGenome0") []))
 
 getUniqueName :: Pool -> String
 getUniqueName pool = name pool ++ "-" ++ show (iterations pool)
@@ -232,22 +233,21 @@ extractFromTreeContext f as = extractChildren f $ fromTree as
   where extractChildren f asZip = (Node (f asZip) [extractChildren f (fromJust $ childAt x asZip) | x <- [0..(length $ subForest $ tree asZip) - 1], isJust $ childAt x asZip])
 
 getWeights :: Tree Individual -> Tree Float
-getWeights individuals = fmap regress $ extractFromTreeContext getFeatures individuals
-  where regress featrs = maybe 0 (\fs -> abs $ fitness fs + abs (fromRational (compilationRate fs) )) featrs
+getWeights individuals = fmap regress $ extractFromTreeContext (\ind -> case label ind of InactiveI _ _ _ -> Nothing; _ -> getFeatures ind) individuals
+  where regress = maybe 0 (\fs -> abs $ fitness fs + abs (fromRational (compilationRate fs) ))
 
 refillPool :: Pool -> IO Pool
-refillPool (Pool name it max min nxt genomes) = do
+refillPool (Pool name it max gain nxt genomes) = do
   let size = length $ filter (\i -> case i of ActiveI _ _ _ -> True; _ -> False) $ flatten genomes
-  let newGenomesCnt = max - size
+  let newGenomesCnt = gain
   let tickets = [nxt .. nxt + newGenomesCnt - 1]
   --We definitely need to preprocess the fitness value
   -- - bare as they are, they're not really good for that purpose
   --negative weights are particularly bad. Thus: Absolute value, just to be sure.
-  --TODO:
   let wtNodes = weightedAssign newGenomesCnt (getWeights genomes)
   let ticketnodes = fmap (\x -> zip x (repeat Nothing) ) $ assignTickets wtNodes tickets
   newGenomes <- createAllChildren genomes ticketnodes
-  return $ Pool name it max min (nxt + newGenomesCnt) newGenomes
+  return $ Pool name it max gain (nxt + newGenomesCnt) newGenomes
 
 --assignTickets :: Tree Int -> [Int] -> Tree [Int]
 assignTickets tree tickets =
