@@ -15,7 +15,7 @@ import GRPMath
 
 test :: IO ()
 test = do
-  let (cnt, lng) = (5000,2000)
+  let (cnt, lng) = (500,20)
   (m1,v1) <- fitnessStability act [] cnt lng
   (m3,v3) <- fitnessStability goodNAct [] cnt lng
   (m2,v2) <- fitnessStability badButBetter [] cnt lng
@@ -26,7 +26,7 @@ fitnessStability act state testCount testLength= do
   inputs <- sequence $ take testCount $ repeat (generateInput testLength) :: IO [Input]
   rng <- newStdGen
   let outputs = map fst $ map (act [rng] state) inputs
-  let fitValues = map (\(i,o) -> fitness i o) (zip inputs outputs)
+  fitValues <- mapM (\(i,o) -> fitness i o) (zip inputs outputs)
   --putStrLn $ show fitValues
   putStrLn ("mean: " ++ show (mean fitValues) ++ " stdDev: " ++ show (sqrt $ variance fitValues) ++ " relative Dev: " ++ (show  ((sqrt $ variance fitValues) / (mean fitValues))))
   return (mean fitValues, variance fitValues)

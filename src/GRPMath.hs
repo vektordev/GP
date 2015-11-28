@@ -18,11 +18,10 @@ variance lst =
   let mn = mean lst
   in foldl (\buff val -> buff + (val - mn) * (val - mn) ) 0 lst / fromIntegral (length lst - 1)
 
---diversity metric: ForAll pair of individuals, calculate distance to common ancestor, sum up.
+--TODO: diversity metric: ForAll pair of individuals, calculate distance to common ancestor, sum up.
 
 --How to assign a number of tickets to a list of weights?
---TODO: This needs to be incorporated into GRPCore.
---weightedAssign :: Int -> [Double] -> [Int]
+weightedAssign :: (Integral a, Integral b, Functor t, Foldable t) => a -> t Float -> t b
 weightedAssign n weights =
   let sw = searchWeight 0.0 10000.0 n weights
   in fmap

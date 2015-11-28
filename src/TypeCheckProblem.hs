@@ -14,6 +14,7 @@ module TypeCheckProblem(
 --though it would be beneficial to also enable checking of whole functions
 --the returned fitness value should establish a viable, learnable slope
 
+--something along the lines of "echo \input\ | ghci"
 fitness = undefined
 generateInput = undefined
 worstScore = undefined

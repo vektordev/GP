@@ -18,6 +18,8 @@ import Data.List
 import Data.Traversable
 import Data.Ratio
 
+import Debug.Trace
+
 import Control.Monad
 import Control.Concurrent.ParallelIO.Global
 
@@ -81,6 +83,7 @@ data Pool = Pool {
 data FeatureVec = FeatureVec {
   id :: Int
 , parentid :: Int
+, generation :: Int
 , fitness :: Float
 , fitnessGainSinceParent :: Float
 , compilationRate :: Ratio Integer
@@ -107,9 +110,17 @@ processArgs _ = putStrLn "invalid operands"
 output :: Pool -> IO()
 output p = do
   --TODO: put a printout of regressed features here.
-  writeFile (getUniqueName p ++ "-fitness") $ unlines $ map show $ sortBy (comparing getFitness) $ flatten $ genomes p
+  writeFile (getUniqueName p ++ "-fitness") $ unlines $ map show $ sortBy (\(x,y) (x2,y2) -> compare (x, getFitness y) (x2, getFitness y2)) (zip (flatten $ getWeights $ genomes p) (flatten $ genomes p))
   writeFile (getUniqueName p ++ "-features") $ getFormattedFeatureDump p
   writeFile (getUniqueName p ++ ".dot") $ getDotFile p
+  writeFile (getUniqueName p ++ "-summary") $ getSummary p
+
+getSummary :: Pool -> String
+getSummary p = unlines [
+  "IDs handed out = " ++ show (nextID p),
+  "Individuals found: " ++ show (length $ flatten $ genomes p),
+  "Compiling genomes: "++ show (length $ filter (\ind -> getFitness ind >= (UnknownCompilerError, 10^10)) $ flatten $ genomes p)
+  ]
 
 --at some point, getDotFile needs to dynamically filter out irrelevant nodes.
 --Particularly, any individual which does not have a live (grand, ..)parent is irrelevant.
@@ -189,13 +200,18 @@ getID loc = case label loc of
   _ -> -1
 
 --TODO: Refactor this mess:
+--TODO: Optimize this mess:
+--  A lot of this will just calculate the same thing that we have already
+--  calculated in the call for another node. This could be helped by first
+--  mapping over the tree
 getFeatures :: TreePos Full Individual -> Maybe FeatureVec
 getFeatures zipperLoc = case label zipperLoc of
   ActiveI id (Compilation, fit) path -> Just (FeatureVec
       (Main.getID zipperLoc)
       (maybe (-1) Main.getID (parent zipperLoc))
+      (getGeneration zipperLoc)
       fit
-      (maybe fit (\tp -> fit - (snd $ getFitness $ label tp)) (parent zipperLoc))
+      (maybe 0 (\tp -> fit - (snd $ getFitness $ label tp)) (parent zipperLoc))
       (if (length offspringC + length offspringNC) == 0 then 0%1 else ((toInteger $ length offspringC) % (toInteger $ length offspringC + length offspringNC)))
       (length offspringC + length offspringNC)
       (if null offspringC then 0 else mean $ map (snd . getFitness) offspringC)
@@ -205,8 +221,9 @@ getFeatures zipperLoc = case label zipperLoc of
   InactiveI id (Compilation, fit) _ -> Just (FeatureVec
       (Main.getID zipperLoc)
       (maybe (-1) Main.getID (parent zipperLoc))
+      (getGeneration zipperLoc)
       fit
-      (maybe fit (\tp -> fit - (snd $ getFitness $ label tp)) (parent zipperLoc))
+      (maybe 0 (\tp -> fit - (snd $ getFitness $ label tp)) (parent zipperLoc))
       (if (length offspringC + length offspringNC) == 0 then 0%1 else ((toInteger $ length offspringC) % (toInteger $ (length offspringC + length offspringNC))))
       (length offspringC + length offspringNC)
       (if null offspringC then 0 else mean $ map (snd . getFitness) offspringC)
@@ -214,6 +231,11 @@ getFeatures zipperLoc = case label zipperLoc of
     where (offspringC, offspringNC) =
             partition (\i -> (Compilation, -1.0 * (2^127)) <= getFitness i) $ map rootLabel $ subForest $ tree zipperLoc
   _ -> Nothing
+
+getGeneration :: TreePos Full Individual -> Int
+getGeneration loc = case parent loc of
+  Nothing -> 1
+  Just loc2 -> 1 + getGeneration loc2
 
 cleanup :: [String] -> IO()
 cleanup [] = return ()
@@ -233,8 +255,8 @@ extractFromTreeContext f as = extractChildren f $ fromTree as
   where extractChildren f asZip = (Node (f asZip) [extractChildren f (fromJust $ childAt x asZip) | x <- [0..(length $ subForest $ tree asZip) - 1], isJust $ childAt x asZip])
 
 getWeights :: Tree Individual -> Tree Float
-getWeights individuals = fmap regress $ extractFromTreeContext (\ind -> case label ind of InactiveI _ _ _ -> Nothing; _ -> getFeatures ind) individuals
-  where regress = maybe 0 (\fs -> abs $ fitness fs + abs (fromRational (compilationRate fs) ))
+getWeights individuals = fmap (maybe 0 regress) $ extractFromTreeContext (\ind -> case label ind of InactiveI _ _ _ -> Nothing; _ -> getFeatures ind) individuals
+  where regress (FeatureVec _ _ generation fit fitgain compilationrate chdren avgchildfit) = (abs fit + 10 * fitgain + abs (fromRational compilationrate)) * fromIntegral generation
 
 refillPool :: Pool -> IO Pool
 refillPool (Pool name it max gain nxt genomes) = do
@@ -251,7 +273,7 @@ refillPool (Pool name it max gain nxt genomes) = do
 
 --assignTickets :: Tree Int -> [Int] -> Tree [Int]
 assignTickets tree tickets =
-  let (x, ticketNodes) = mapAccumR (\tickets weight -> if length tickets < weight then error "Too few tickets in assignTickets" else (drop weight tickets, take weight tickets)) tickets tree
+  let (x, ticketNodes) = mapAccumR (\tickets weight -> if length tickets < weight then trace ("lacking " ++ show (weight - length tickets) ++ " tickets in assignTickets") ([], tickets) else (drop weight tickets, take weight tickets)) tickets tree
   in if null x then ticketNodes else error "Too many tickets in assignTickets"
 
 createAllChildren :: Tree Individual -> Tree [(Int, Maybe FilePath)] -> IO (Tree Individual)
@@ -298,6 +320,7 @@ createChild loc id srcCode = do
   let
     mkChild ind@(ActiveI parentID fit path) id srcCode = do
       writeFile (path ++ ".hs.stat") $show ind
+      --TODO: err and out are completely disregarded.
       (code, out, err) <- readProcessWithExitCode "timeout"
         ["1s", path ++ "hl", "-e", srcCode ++ ".hs", "GRPGenome" ++ show id ++ ".hs"] ""
       System.Directory.removeFile (path ++ ".hs.stat") --state would be lost here
@@ -320,6 +343,7 @@ filterPool (Pool name it max min nID population) =
     fileremovals = flatten $ fmap snd updPopAndFileRemovals
     threshold          = getFitness $ (!!) (sortBy (flip compare) (flatten population)) (min - 1)
     --this labels individuals as inactive.
+    --TODO: This should not go by fitness, but by regressed features
     updatedPopulation  = fmap (updateIndividual threshold) updatedPopulation'
 
 --this function is going to become tricky later on. Right now, it's just a plain old

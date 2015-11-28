@@ -13,11 +13,11 @@ import System.Random
 type Input = [Int]
 type Output = ([Int], [Int])
 
-fitness :: Input -> Output -> Float
+fitness :: Input -> Output -> IO Float
 fitness input out =
   if sort input == sort (fst out ++ snd out) --is it a valid partitioning?
-  then - (fromIntegral $ abs ((sum $ fst out) - (sum $ snd out)))
-  else - (fromIntegral $ sum $ map abs input)
+  then return $ - (fromIntegral $ abs ((sum $ fst out) - (sum $ snd out)))
+  else return $ - (fromIntegral $ sum $ map abs input)
 
 generateInput :: Int -> IO Input
 generateInput 0 = return []

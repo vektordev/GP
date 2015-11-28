@@ -36,7 +36,6 @@ fitOut str = return ()
 
 -- source code -> assigned future filepath ->
 -- Fitness Value and a list of errors to point out to the parent (and their magnitude)
--- TODO: I don't really like the trace() here
 computeFitness :: String -> FilePath -> IO (Fitness, [(Int, String)])
 computeFitness source path = do
   fitOut ("trying to compile path " ++ path)
@@ -46,6 +45,7 @@ computeFitness source path = do
     fitOut ("Genome Unsafe" ++ safetymsg)
     return ((Unsafe, 0.0), [(-10, safetymsg)]) -- fitness: safety violation
   else do
+    --TODO: err and out are completely disregarded.
     (code, out, err) <- readProcessWithExitCode "ghc" [path] []
     fitOut "Compiler output: "
     fitOut out
@@ -67,13 +67,13 @@ computeProblemFitness :: ([StdGen] -> State -> Input -> (Output, State)) -> Stat
 computeProblemFitness actFnc agState = do
   rng <- newStdGen
   input <- generateInput 20
---TODO: Measure time the agent took to compute the result
   let (out, newSt) = actFnc [rng] agState input
-  return (normalizeFitness input $ fitness input out, newSt)
+  fit <- fitness input out
+  return (normalizeFitness input fit, newSt)
 
 normalizeFitness :: Input -> Float -> Float
-normalizeFitness input raw =
-  (raw - worstScore input) / (bestScore input - worstScore input)
+normalizeFitness input rawFitValue =
+  (rawFitValue - worstScore input) / (bestScore input - worstScore input)
 
 --This needs to aggregate the errors and process them.
 compileErrorFitness :: String -> String -> (Fitness, [(Int, String)])

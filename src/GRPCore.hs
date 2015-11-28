@@ -228,7 +228,6 @@ digestFeedback ags fb =
 --This function evaluates the fitness value of a Genome.
 --It also returns the parent's name if the genome didn't compile.
 --This is tracked and accounted for when assigning tickets for new offspring.
---TODO: Needs to return quickly if the genome has been eval'd before.
 --  Maybe we want the fitness value noise of evaluating a genome every iteration?
 evalGenome :: AgentStats -> IO (AgentStats, [(Bool, String)])
 evalGenome ag@(AgentStats path fitOld ancestry generation state fitToParent eval comp) =

@@ -124,7 +124,6 @@ functions = [
   --How to generate primitive numbers?
   ]
 
---TODO: add type declaration here  - use Int rather than default Integer....?
 programAtoms = [
   ("code", "", 1),
   ("rndgen", "", 1),
