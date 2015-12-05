@@ -60,18 +60,13 @@ data Pool = Pool {
 
 -- problem-oriented fitness is a dead end.
 -- factors to consider for CompoundFitness: (if applicable)
---  Fitness value of parent
 --  Compilation rate of siblings
 --  Compilation rate of parents' siblings
---  Fitness gain in last generation (fitself - fitparent)
---  Compilation rate of children
---  Number of generated children
 -- All this information is readily available from the tree structure.
 -- To get an overview, this data should be visualizable.
 -- The following features are available:
 --  Regarding children:
 --    Mean and variance of available(i.e. computed without failure) fitness values, count and compilation rate.
---  Fit value of the individual
 --  The features of children can always also be applied to grandchildren, etc.
 -- When looking at a feature vector, it should be noted that most of the values are only partly explored.
 
@@ -91,6 +86,10 @@ data FeatureVec = FeatureVec {
 , avgChildFit :: Float
 } deriving (Show, Read)
 
+--TODO: Pool needs to respect InactiveI or ActiveI status.
+
+--TODO: Pool needs to make InactiveI/ActiveI decision dependant on regressed features.
+
 main = do
   args <- getArgs
   processArgs args
@@ -99,18 +98,21 @@ main = do
 --syntax: --start m n name --iterations i --no-output
 --syntax: --load path --iterations 0
 --syntax: --testrun
+--syntax: --truncate path newname --iterations n
 processArgs :: [String] -> IO ()
 processArgs ["--testrun"] = testrun
 processArgs ("--start" : gain : min : name : "--iterations" : it : options) =
-  initialPool (read gain) (read min) name >>= runPool (read it) options
+  initialPool (read gain) (read min) name  >>= runPool (read it) options
 processArgs ("--load"  : path              : "--iterations" : it : options) =
-  loadFromFile path                       >>= runPool (read it) options
+  loadFromFile path                        >>= runPool (read it) options
+processArgs ("--truncate" : path : newname : "--iterations" : it : options) =
+  loadFromFile path >>= truncateP newname  >>= runPool (read it) options
 processArgs _ = putStrLn "invalid operands"
 
 output :: Pool -> IO()
 output p = do
   --TODO: put a printout of regressed features here.
-  writeFile (getUniqueName p ++ "-fitness") $ unlines $ map show $ sortBy (\(x,y) (x2,y2) -> compare (x, getFitness y) (x2, getFitness y2)) (zip (flatten $ getWeights $ genomes p) (flatten $ genomes p))
+  writeFile (getUniqueName p ++ "-fitness") $ unlines $ map show $ sortBy (\(x,y) (x2,y2) -> compare (x, getFitness y) (x2, getFitness y2)) (zip (flatten $ getWeights (iterations p) $ genomes p) (flatten $ genomes p))
   writeFile (getUniqueName p ++ "-features") $ getFormattedFeatureDump p
   writeFile (getUniqueName p ++ ".dot") $ getDotFile p
   writeFile (getUniqueName p ++ "-summary") $ getSummary p
@@ -156,7 +158,19 @@ initialPool gain min name = do
   writeFile "./GRPGenome0.hs" ("--{-# LANGUAGE Safe #-}\nmodule GRPGenome0\n" ++ unlines ( drop 2 $ lines src))
   generate "./GRPGenome0.hs"
   --This function does NOT write .stat to disk. This is done before calls to the executable.
-  return (Pool name 0 gain min 1 (Node (ActiveI 0 (Unchecked, 0.0) "./GRPGenome0") []))
+  return (Pool name 1 gain min 1 (Node (ActiveI 0 (Unchecked, 0.0) "./GRPGenome0") []))
+
+truncateP :: String -> Pool -> IO Pool
+truncateP newname pool = do
+  let bestFit = maximum $ flatten $ getWeights (iterations pool) (genomes pool) :: Float
+  let rootInd = ( fmap snd $ find (\x -> bestFit == fst x) (zip (flatten $ getWeights (iterations pool) (genomes pool)) $ flatten $ genomes pool) ) :: Maybe Individual
+  let filepath = fromMaybe "" $ maybe Nothing path rootInd
+  src <- System.IO.Strict.readFile filepath --goes boom if any of the above fails.
+  (code, out, err) <- readProcessWithExitCode "./soft-cleanup.sh" [] ""
+  writeFile "./GRPGenome0.hs" ("--{-# LANGUAGE Safe #-}\nmodule GRPGenome0\n" ++ unlines ( drop 2 $ lines src))
+  generate "./GRPGenome0.hs"
+  return (Pool newname 1 (maxSize pool) (filteredSize pool) 1 (Node (ActiveI 0 (Unchecked, 0.0) "./GRPGenome0") []))
+
 
 getUniqueName :: Pool -> String
 getUniqueName pool = name pool ++ "-" ++ show (iterations pool)
@@ -183,6 +197,22 @@ iteratePool it options p = do
   cleanup rmpaths
   rp <- refillPool fp
   iteratePool (it-1) options rp{iterations = iterations rp +1}
+
+--TODO:
+--Changes some labels around: keeps min Individuals active
+--keeps another min Individuals Inactive
+--labels the rest as JunkI
+--Kepp JunkI iff any of these is true:
+--  It is less than X degrees of separation from the nearest InactiveI
+--    X is the number of Degrees of separation that feature extraction considers
+--  It is the common ancestor of the entire [In]Active Population
+--  It is a ancestor of only part of the Population
+--This should leave: A tree where the [In]Active population from above persists,
+--gets rated the same as before, has one and only one common ancestor and no
+--unneeded Individuals
+--removes all unneeded files
+garbageCollection :: Pool -> IO Pool
+garbageCollection pool = undefined
 
 getFormattedFeatureDump :: Pool -> String
 getFormattedFeatureDump (Pool _ _ _ _ _ individuals) = format (iterateTZipper getFeatures $ fromTree individuals)
@@ -254,9 +284,12 @@ extractFromTreeContext :: (TreePos Full a -> b) -> Tree a -> Tree b
 extractFromTreeContext f as = extractChildren f $ fromTree as
   where extractChildren f asZip = (Node (f asZip) [extractChildren f (fromJust $ childAt x asZip) | x <- [0..(length $ subForest $ tree asZip) - 1], isJust $ childAt x asZip])
 
-getWeights :: Tree Individual -> Tree Float
-getWeights individuals = fmap (maybe 0 regress) $ extractFromTreeContext (\ind -> case label ind of InactiveI _ _ _ -> Nothing; _ -> getFeatures ind) individuals
-  where regress (FeatureVec _ _ generation fit fitgain compilationrate chdren avgchildfit) = (abs fit + 10 * fitgain + abs (fromRational compilationrate)) * fromIntegral generation
+--TODO: In order to remove the worst of sampling bias, pretending there was one compiling child in the compilation rate would help enormously.
+getWeights :: Int -> Tree Individual -> Tree Float
+getWeights iteration individuals = fmap (maybe 0 regress) $ extractFromTreeContext (\ind -> case label ind of InactiveI _ _ _ -> Nothing; _ -> getFeatures ind) individuals
+  where
+    regress (FeatureVec _ _ generation fit fitgain compilationrate chdren avgchildfit) =
+      (abs fit + 10 * fitgain + abs (fromRational compilationrate)) * fromIntegral generation
 
 refillPool :: Pool -> IO Pool
 refillPool (Pool name it max gain nxt genomes) = do
@@ -266,7 +299,7 @@ refillPool (Pool name it max gain nxt genomes) = do
   --We definitely need to preprocess the fitness value
   -- - bare as they are, they're not really good for that purpose
   --negative weights are particularly bad. Thus: Absolute value, just to be sure.
-  let wtNodes = weightedAssign newGenomesCnt (getWeights genomes)
+  let wtNodes = weightedAssign newGenomesCnt (getWeights it genomes)
   let ticketnodes = fmap (\x -> zip x (repeat Nothing) ) $ assignTickets wtNodes tickets
   newGenomes <- createAllChildren genomes ticketnodes
   return $ Pool name it max gain (nxt + newGenomesCnt) newGenomes

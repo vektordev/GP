@@ -17,3 +17,5 @@ cabal.sandbox.config
 GRPGenome*
 result*
 ancestry*
+log
+errlog

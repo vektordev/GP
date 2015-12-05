@@ -22,7 +22,16 @@ import PartitioningProblem
   computeFitness is called by GRPCore and ensures safety properties of the source code and then compiles the genome.
 -}
 
-data Level = Unchecked | Unsafe | ParseErr | ScopeErr | AmbiguousSymbolErr | TypeErr | NoBindingError | UnknownCompilerError | Compilation deriving (Show, Read, Eq, Ord)
+data Level =
+  Unchecked |
+  Unsafe |
+  ParseErr |
+  ScopeErr |
+  AmbiguousSymbolErr |
+  TypeErr |
+  NoBindingError |
+  UnknownCompilerError |
+  Compilation deriving (Show, Read, Eq, Ord)
 --first one is the "fitness level" that was achieved. Second one is the score within that level.
 --For most of the levels, this will be const 0, until fine grained detail in those areas is required.
 type Fitness = (Level, Float)
@@ -66,7 +75,7 @@ computeFitness source path = do
 computeProblemFitness :: ([StdGen] -> State -> Input -> (Output, State)) -> State -> IO (Float, State)
 computeProblemFitness actFnc agState = do
   rng <- newStdGen
-  input <- generateInput 20
+  input <- generateInput 512
   let (out, newSt) = actFnc [rng] agState input
   fit <- fitness input out
   return (normalizeFitness input fit, newSt)
