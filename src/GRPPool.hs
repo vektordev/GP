@@ -165,12 +165,11 @@ truncateP newname pool = do
   let bestFit = maximum $ flatten $ getWeights (iterations pool) (genomes pool) :: Float
   let rootInd = ( fmap snd $ find (\x -> bestFit == fst x) (zip (flatten $ getWeights (iterations pool) (genomes pool)) $ flatten $ genomes pool) ) :: Maybe Individual
   let filepath = fromMaybe "" $ maybe Nothing path rootInd
-  src <- System.IO.Strict.readFile filepath --goes boom if any of the above fails.
+  src <- System.IO.Strict.readFile (filepath ++ ".hs") --goes boom if any of the above fails.
   (code, out, err) <- readProcessWithExitCode "./soft-cleanup.sh" [] ""
   writeFile "./GRPGenome0.hs" ("--{-# LANGUAGE Safe #-}\nmodule GRPGenome0\n" ++ unlines ( drop 2 $ lines src))
   generate "./GRPGenome0.hs"
   return (Pool newname 1 (maxSize pool) (filteredSize pool) 1 (Node (ActiveI 0 (Unchecked, 0.0) "./GRPGenome0") []))
-
 
 getUniqueName :: Pool -> String
 getUniqueName pool = name pool ++ "-" ++ show (iterations pool)
