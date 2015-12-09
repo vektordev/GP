@@ -97,4 +97,4 @@ compileErrorFitness out err
   | "Couldn't match" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)),[])
   | "parse error" `isInfixOf` err = ((ParseErr, -(fromIntegral $ length err)),[])
   | "Not in scope" `isInfixOf` err = ((ScopeErr, -(fromIntegral $ length err)),[])
-  | otherwise = trace ("Unknown compiler error: " ++ err) ((UnknownCompilerError, -(fromIntegral $ length err)),[])
+  | otherwise = trace ("GRPFitness: Unknown compiler error: " ++ err) ((UnknownCompilerError, -(fromIntegral $ length err)),[])

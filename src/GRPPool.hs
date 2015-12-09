@@ -190,7 +190,7 @@ iteratePool :: Int -> [String] -> Pool -> IO Pool
 iteratePool 0 options p = return p
 iteratePool it options p = do
   --TODO: Change order of these operations.
-  putStrLn ("Starting iteration" ++ show it)
+  putStrLn ("Starting iteration" ++ show (iterations p))
   ep <- evaluateFitness p
   let (fp, rmpaths) = filterPool ep
   cleanup rmpaths

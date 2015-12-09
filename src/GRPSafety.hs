@@ -39,7 +39,7 @@ isSafe source = do
     containsBadWords =  any (\badWord -> badWord `isInfixOf` (fromJust $ dropSafetyPrefix source)) prohibited --drop the safety prefix here
     hasBadChars = not $ null $ filter (\char -> not $ elem char ('\r':'\t':'\n':[' '..'~'])) source
   if not saneSafeLines
-  then trace "Error with safeLines" (False, "Safety: Please check safeLines limit of source code")
+  then trace "GRPSafety: Error with safeLines" (False, "Safety: Please check safeLines limit of source code")
   else if containsBadWords
   then (False, "Safety: Prohibited words detected.")
   else if hasBadChars
