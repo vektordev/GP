@@ -1,6 +1,6 @@
 module GRPFitness
 ( Fitness
-, Level(Unchecked, Unsafe, UnknownCompilerError, Compilation)
+, Level(Unchecked, Unsafe, RuntimeErrOnParent, UnknownCompilerError, Compilation)
 , computeProblemFitness
 , computeFitness
 ) where
@@ -28,6 +28,7 @@ import GRPMath
 data Level =
   Unchecked |
   Unsafe |
+  RuntimeErrOnParent |
   MiscErr |
   ParseErr |
   ScopeErr |

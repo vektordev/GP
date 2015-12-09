@@ -364,7 +364,7 @@ createChild loc id srcCode = do
         then do
           generate ("GRPGenome" ++ show id ++ ".hs")
           return [Node (ActiveI id (Unchecked, 0.0) ("./GRPGenome" ++ show id)) []]
-        else return []
+        else return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []] --TODO: confirm whether this works. We shouldn't leak any IDs anymore
   newElem <- mkChild (rootLabel $ tree loc) id srcCode -- rootlabel . tree == label ?
   return (modifyTree (\(Node a subnodes) -> Node a (newElem ++ subnodes)) loc)
 
