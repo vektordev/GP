@@ -9,12 +9,15 @@ import System.Exit (ExitCode(..))
 
 import Data.List
 
+import Control.Monad
+
 import GRPSafety
 import Debug.Trace
 import System.Process (readProcessWithExitCode, createProcess, shell)
 import System.Random
 import GRPCommon
 import PartitioningProblem
+import GRPMath
 
 {-
   This file handles all things fitness, and by extension, safety.
@@ -74,11 +77,12 @@ computeFitness source path = do
 --This can be extended to evaluate fitness in different problem domains.
 computeProblemFitness :: ([StdGen] -> State -> Input -> (Output, State)) -> State -> IO (Float, State)
 computeProblemFitness actFnc agState = do
-  rng <- newStdGen
-  input <- generateInput 512
-  let (out, newSt) = actFnc [rng] agState input
-  fit <- fitness input out
-  return (normalizeFitness input fit, newSt)
+  let queries = [2..11]
+  rngs <- replicateM (length queries) newStdGen
+  inputs <- mapM generateInput [2^n | n <- queries]
+  let (newSt, outs)= foldr (\ (input, rng) (state, oldouts) -> let (actOut, actState) = actFnc [rng] state input in (actState, actOut : oldouts)) (agState, []) (zip inputs rngs) :: (State, [Output])  --actFnc [rng] agState input
+  fits <- zipWithM fitness inputs outs
+  return (mean $ zipWith normalizeFitness inputs fits, newSt) --(sum (map normalizeFitness inputs fit) / (length queries), newSt)
 
 normalizeFitness :: Input -> Float -> Float
 normalizeFitness input rawFitValue =

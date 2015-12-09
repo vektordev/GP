@@ -107,7 +107,7 @@ processArgs ("--load"  : path              : "--iterations" : it : options) =
   loadFromFile path                        >>= runPool (read it) options
 processArgs ("--truncate" : path : newname : "--iterations" : it : options) =
   loadFromFile path >>= truncateP newname  >>= runPool (read it) options
-processArgs _ = putStrLn "invalid operands"
+processArgs _ = putStrLn "invalid operands.\nOperands are:\n  --testrun\n  --start max min name --iterations n [--no-output]\n  --load path --iter...\n  --truncate path newname --iter..."
 
 output :: Pool -> IO()
 output p = do
@@ -190,7 +190,7 @@ iteratePool :: Int -> [String] -> Pool -> IO Pool
 iteratePool 0 options p = return p
 iteratePool it options p = do
   --TODO: Change order of these operations.
-  putStrLn "Starting iteration"
+  putStrLn ("Starting iteration" ++ show it)
   ep <- evaluateFitness p
   let (fp, rmpaths) = filterPool ep
   cleanup rmpaths
@@ -285,10 +285,12 @@ extractFromTreeContext f as = extractChildren f $ fromTree as
 
 --TODO: In order to remove the worst of sampling bias, pretending there was one compiling child in the compilation rate would help enormously.
 getWeights :: Int -> Tree Individual -> Tree Float
-getWeights iteration individuals = fmap (maybe 0 regress) $ extractFromTreeContext (\ind -> case label ind of InactiveI _ _ _ -> Nothing; _ -> getFeatures ind) individuals
+getWeights iteration individuals = fmap (maybe 0 regressRateOnly) $ extractFromTreeContext (\ind -> case label ind of InactiveI _ _ _ -> Nothing; _ -> getFeatures ind) individuals
   where
     regress (FeatureVec _ _ generation fit fitgain compilationrate chdren avgchildfit) =
       (abs fit + 10 * fitgain + abs (fromRational compilationrate)) * fromIntegral generation
+    regressRateOnly (FeatureVec _ _ generation fit fitgain compilationrate chdren avgchildfit) =
+      fromRational (((compilationrate * (fromIntegral chdren%1)) + 1) / ((fromIntegral chdren%1)+1)) + 0.1 * fit
 
 refillPool :: Pool -> IO Pool
 refillPool (Pool name it max gain nxt genomes) = do
