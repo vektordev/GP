@@ -28,6 +28,7 @@ import GRPMath
 data Level =
   Unchecked |
   Unsafe |
+  MiscErr |
   ParseErr |
   ScopeErr |
   AmbiguousSymbolErr |
@@ -91,10 +92,14 @@ normalizeFitness input rawFitValue =
 --This needs to aggregate the errors and process them.
 compileErrorFitness :: String -> String -> (Fitness, [(Int, String)])
 compileErrorFitness out err
+  | "Illegal tuple section" `isInfixOf` err = ((MiscErr, -(fromIntegral $ length err)), [])
   | "No instance for" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)), [])
   | "lacks an accompanying binding" `isInfixOf` err = ((NoBindingError, -(fromIntegral $ length err)),[])
-  | "Ambiguous occurence" `isInfixOf` err = ((AmbiguousSymbolErr, -(fromIntegral $ length err)),[])
+  | "must have lower precedence than that of the operand" `isInfixOf` err = ((MiscErr, -(fromIntegral $ length err)),[])
+  | "Ambiguous occurrence" `isInfixOf` err = ((AmbiguousSymbolErr, -(fromIntegral $ length err)),[])
   | "Couldn't match" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)),[])
+  | " arguments but has been given " `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)),[])
   | "parse error" `isInfixOf` err = ((ParseErr, -(fromIntegral $ length err)),[])
+  | "Parse error" `isInfixOf` err = ((ParseErr, -(fromIntegral $ length err)),[])
   | "Not in scope" `isInfixOf` err = ((ScopeErr, -(fromIntegral $ length err)),[])
   | otherwise = trace ("GRPFitness: Unknown compiler error: " ++ err) ((UnknownCompilerError, -(fromIntegral $ length err)),[])
