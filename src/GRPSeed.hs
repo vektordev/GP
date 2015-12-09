@@ -34,7 +34,7 @@ t2 = do
 -}
 
 --The Danger Zone starts here. Keep the next line up to date:
-safeLines = 36
+safeLines = 37
 reprogram ( r1 : _ ) state ( source1 : _ ) = let candidates = map ( \ rng -> lexemlisttransform ( preproc source1 ) rng state ) ( infrg r1 ) in (head $ filter ( \ candidate -> ( candidate /= postproc ( preproc source1 ) ) && ( parseable candidate ) ) (map postproc $ filter (\x -> True) candidates), state )
 parseable str = let result = parseModule str in wasSuccess result
 wasSuccess ( ParseFailed _ _ ) = False

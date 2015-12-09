@@ -9,6 +9,7 @@ import System.Process (readProcessWithExitCode)
 import System.Exit (ExitCode(..))
 import System.Directory (removeFile)
 import System.Environment (getArgs)
+import System.IO
 
 import Data.Tree
 import Data.Tree.Zipper
@@ -91,6 +92,7 @@ data FeatureVec = FeatureVec {
 --TODO: Pool needs to make InactiveI/ActiveI decision dependant on regressed features.
 
 main = do
+  hSetBuffering stdout LineBuffering
   args <- getArgs
   processArgs args
   stopGlobalPool --stops the thread pool
