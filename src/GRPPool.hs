@@ -192,7 +192,7 @@ iteratePool :: Int -> [String] -> Pool -> IO Pool
 iteratePool 0 options p = return p
 iteratePool it options p = do
   --TODO: Change order of these operations.
-  putStrLn ("Starting iteration" ++ show (iterations p))
+  putStrLn ("Starting iteration " ++ show (iterations p))
   ep <- evaluateFitness p
   let (fp, rmpaths) = filterPool ep
   cleanup rmpaths
@@ -206,7 +206,7 @@ iteratePool it options p = do
 --Kepp JunkI iff any of these is true:
 --  It is less than X degrees of separation from the nearest InactiveI
 --    X is the number of Degrees of separation that feature extraction considers
---  It is the common ancestor of the entire [In]Active Population
+--  It is the only common ancestor of the entire [In]Active Population
 --  It is a ancestor of only part of the Population
 --This should leave: A tree where the [In]Active population from above persists,
 --gets rated the same as before, has one and only one common ancestor and no
@@ -292,7 +292,7 @@ getWeights iteration individuals = fmap (maybe 0 regressRateOnly) $ extractFromT
     regress (FeatureVec _ _ generation fit fitgain compilationrate chdren avgchildfit) =
       (abs fit + 10 * fitgain + abs (fromRational compilationrate)) * fromIntegral generation
     regressRateOnly (FeatureVec _ _ generation fit fitgain compilationrate chdren avgchildfit) =
-      fromRational (((compilationrate * (fromIntegral chdren%1)) + 1) / ((fromIntegral chdren%1)+1)) + 0.1 * fit
+      fromRational (((compilationrate * (fromIntegral chdren%1)) + 1) / ((fromIntegral chdren%1)+1)) + 0.005 * fit
 
 refillPool :: Pool -> IO Pool
 refillPool (Pool name it max gain nxt genomes) = do
@@ -364,7 +364,7 @@ createChild loc id srcCode = do
         then do
           generate ("GRPGenome" ++ show id ++ ".hs")
           return [Node (ActiveI id (Unchecked, 0.0) ("./GRPGenome" ++ show id)) []]
-        else return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []] --TODO: confirm whether this works. We shouldn't leak any IDs anymore
+        else trace ("runtime error was: " ++ err) return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []] --TODO: confirm whether this works. We shouldn't leak any IDs anymore
   newElem <- mkChild (rootLabel $ tree loc) id srcCode -- rootlabel . tree == label ?
   return (modifyTree (\(Node a subnodes) -> Node a (newElem ++ subnodes)) loc)
 
