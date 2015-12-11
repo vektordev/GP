@@ -2,10 +2,12 @@ module GRPMath
 ( weightedAssign
 , mean
 , variance
+, rawHistogram
 )
 where
 
 import Debug.Trace
+import Data.List
 
 --Statistics functions
 --TODO: there's probably a gaussian package somewhere on hackage already.
@@ -19,6 +21,8 @@ variance lst =
   in foldl (\buff val -> buff + (val - mn) * (val - mn) ) 0 lst / fromIntegral (length lst - 1)
 
 --TODO: diversity metric: ForAll pair of individuals, calculate distance to common ancestor, sum up.
+
+rawHistogram lst = map (\lst -> (length lst, head lst)) $ group $ sort lst
 
 --How to assign a number of tickets to a list of weights?
 weightedAssign :: (Integral a, Integral b, Functor t, Foldable t) => a -> t Float -> t b
