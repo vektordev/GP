@@ -6,6 +6,8 @@ module GRPIndividual
 , updateIndividual
 , removeJunk
 , getID
+, setActive
+, setInactive
 ) where
 
 import GRPFitness
@@ -45,8 +47,16 @@ updateIndividual thres (JunkI     i f)      = JunkI i f
 updateIndividual thres (ActiveI   i f path) = if f >= thres then ActiveI i f path else InactiveI i f path
 updateIndividual thres (InactiveI i f path) = if f >= thres then ActiveI i f path else InactiveI i f path
 
-removeJunk :: Individual -> (Individual, String)
-removeJunk ind@(ActiveI i (Compilation, f2) p) = (ind, "")
-removeJunk ind@(InactiveI i (Compilation, f2) p) = (ind, "")
-removeJunk ind@(JunkI i p) = (ind, "")
-removeJunk ind@(ActiveI i (_, f) p) = (JunkI i $ getFitness ind, p)
+setActive :: Individual -> Individual
+setActive (InactiveI i f path) = ActiveI i f path
+setActive ind = ind
+
+setInactive :: Individual -> Individual
+setInactive (ActiveI i f path) = InactiveI i f path
+setInactive ind = ind
+
+removeJunk :: Individual -> (Individual, Maybe String)
+removeJunk ind@(ActiveI i (Compilation, f2) p) = (ind, Nothing)
+removeJunk ind@(InactiveI i (Compilation, f2) p) = (ind, Nothing)
+removeJunk ind@(JunkI i p) = (ind, Nothing)
+removeJunk ind@(ActiveI i (_, f) p) = (JunkI i $ getFitness ind, Just p)

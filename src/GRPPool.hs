@@ -27,15 +27,8 @@ import Control.Concurrent.ParallelIO.Global
 --currently supports only one single root node. This can be changed later on.
 --no State currently within Individual.
 --
---this needs to support:
--- +  toDotFile - trivial
---  iteratePool - agnostic of internal structure
---  initialPool - trivial
--- +  showPool - map?
+--TODO: Still not implemented:
 -- +  cartesianProduct - rather easy, needs insertion of node
---  refillPool - bit complicated, needs insertion of node
---    insertion of node
---  evaluateFitness - plain old map
 --
 --  Inactive Individuals can become active again if a ActiveI's effective value
 --    (after accounting for ancestral context) decreases over time.
@@ -87,6 +80,8 @@ data FeatureVec = FeatureVec {
 , avgChildFit :: Float
 } deriving (Show, Read)
 
+--TODO: Optimization flag in build script
+
 --TODO: Pool needs to respect InactiveI or ActiveI status.
 
 --TODO: Pool needs to make InactiveI/ActiveI decision dependant on regressed features.
@@ -113,8 +108,7 @@ processArgs _ = putStrLn "invalid operands.\nOperands are:\n  --testrun\n  --sta
 
 output :: Pool -> IO()
 output p = do
-  --TODO: put a printout of regressed features here.
-  writeFile (getUniqueName p ++ "-fitness") $ unlines $ map show $ sortBy (\(x,y) (x2,y2) -> compare (x, getFitness y) (x2, getFitness y2)) (zip (flatten $ getWeights (iterations p) $ genomes p) (flatten $ genomes p))
+  writeFile (getUniqueName p ++ "-fitness") $ unlines $ map show $ sortBy (\(x,y) (x2,y2) -> compare (x, getFitness y) (x2, getFitness y2)) (zip (flatten $ getWeights $ genomes p) (flatten $ genomes p))
   writeFile (getUniqueName p ++ "-features") $ getFormattedFeatureDump p
   writeFile (getUniqueName p ++ ".dot") $ getDotFile p
   writeFile (getUniqueName p ++ "-summary") $ getSummary p
@@ -160,12 +154,12 @@ initialPool gain min name = do
   writeFile "./GRPGenome0.hs" ("--{-# LANGUAGE Safe #-}\nmodule GRPGenome0\n" ++ unlines ( drop 2 $ lines src))
   generate "./GRPGenome0.hs"
   --This function does NOT write .stat to disk. This is done before calls to the executable.
-  return (Pool name 1 gain min 1 (Node (ActiveI 0 (Unchecked, 0.0) "./GRPGenome0") []))
+  evaluateFitness (Pool name 1 gain min 1 (Node (ActiveI 0 (Unchecked, 0.0) "./GRPGenome0") []))
 
 truncateP :: String -> Pool -> IO Pool
 truncateP newname pool = do
-  let bestFit = maximum $ flatten $ getWeights (iterations pool) (genomes pool) :: Float
-  let rootInd = ( fmap snd $ find (\x -> bestFit == fst x) (zip (flatten $ getWeights (iterations pool) (genomes pool)) $ flatten $ genomes pool) ) :: Maybe Individual
+  let bestFit = maximum $ flatten $ getWeights (genomes pool) :: Float
+  let rootInd = ( fmap snd $ find (\x -> bestFit == fst x) (zip (flatten $ getWeights (genomes pool)) $ flatten $ genomes pool) ) :: Maybe Individual
   let filepath = fromMaybe "" $ maybe Nothing path rootInd
   src <- System.IO.Strict.readFile (filepath ++ ".hs") --goes boom if any of the above fails.
   (code, out, err) <- readProcessWithExitCode "./soft-cleanup.sh" [] ""
@@ -191,13 +185,15 @@ poolSummary p = do
 iteratePool :: Int -> [String] -> Pool -> IO Pool
 iteratePool 0 options p = return p
 iteratePool it options p = do
-  --TODO: Change order of these operations.
   putStrLn ("Starting iteration " ++ show (iterations p))
-  ep <- evaluateFitness p
-  let (fp, rmpaths) = filterPool ep
+  rp <- refillPool p
+  ep <- evaluateFitness rp
+  let (newPop, rmpaths) = filterPool (filteredSize ep) $ zipTreeWith (\a b -> (a,b)) (genomes ep) (getWeights $genomes ep)
   cleanup rmpaths
-  rp <- refillPool fp
-  iteratePool (it-1) options rp{iterations = iterations rp +1}
+  iteratePool (it-1) options ep{iterations = iterations ep +1, genomes = newPop}
+
+zipTreeWith :: (a -> b -> c) -> Tree a -> Tree b -> Tree c
+zipTreeWith func (Node elA subforestA) (Node elB subforestB) = Node (func elA elB) $ zipWith (zipTreeWith func) subforestA subforestB
 
 --TODO:
 --Changes some labels around: keeps min Individuals active
@@ -285,14 +281,15 @@ extractFromTreeContext :: (TreePos Full a -> b) -> Tree a -> Tree b
 extractFromTreeContext f as = extractChildren f $ fromTree as
   where extractChildren f asZip = (Node (f asZip) [extractChildren f (fromJust $ childAt x asZip) | x <- [0..(length $ subForest $ tree asZip) - 1], isJust $ childAt x asZip])
 
---TODO: In order to remove the worst of sampling bias, pretending there was one compiling child in the compilation rate would help enormously.
-getWeights :: Int -> Tree Individual -> Tree Float
-getWeights iteration individuals = fmap (maybe 0 regressRateOnly) $ extractFromTreeContext (\ind -> case label ind of InactiveI _ _ _ -> Nothing; _ -> getFeatures ind) individuals
+getWeights :: Tree Individual -> Tree Float
+getWeights individuals = fmap (maybe 0 regressRateOnly) $ extractFromTreeContext (\ind -> case label ind of InactiveI _ _ _ -> Nothing; _ -> getFeatures ind) individuals
   where
     regress (FeatureVec _ _ generation fit fitgain compilationrate chdren avgchildfit) =
       (abs fit + 10 * fitgain + abs (fromRational compilationrate)) * fromIntegral generation
-    regressRateOnly (FeatureVec _ _ generation fit fitgain compilationrate chdren avgchildfit) =
-      fromRational (((compilationrate * (fromIntegral chdren%1)) + 1) / ((fromIntegral chdren%1)+1)) + 0.005 * fit
+    --add 1 to numerator, so we remove some sampling bias. Respects fitness a tiny bit. Eliminates extremely high compilation rates, which indicate local max.
+    regressRateOnly (FeatureVec id _ generation fit fitgain compilationrate chdren avgchildfit) =
+      (fromRational (((compilationrate * (fromIntegral chdren%1)) + 1) / ((fromIntegral chdren%1)+1)) + 0.005 * fit)
+        * (if compilationrate > 1%10 then trace ("unusually high compilation rate in genome " ++ show id) (if compilationrate > 1 % 5 then trace "labelling as local max" 0 else 1) else 1 )
 
 refillPool :: Pool -> IO Pool
 refillPool (Pool name it max gain nxt genomes) = do
@@ -302,7 +299,7 @@ refillPool (Pool name it max gain nxt genomes) = do
   --We definitely need to preprocess the fitness value
   -- - bare as they are, they're not really good for that purpose
   --negative weights are particularly bad. Thus: Absolute value, just to be sure.
-  let wtNodes = weightedAssign newGenomesCnt (getWeights it genomes)
+  let wtNodes = weightedAssign newGenomesCnt (getWeights genomes)
   let ticketnodes = fmap (\x -> zip x (repeat Nothing) ) $ assignTickets wtNodes tickets
   newGenomes <- createAllChildren genomes ticketnodes
   return $ Pool name it max gain (nxt + newGenomesCnt) newGenomes
@@ -364,23 +361,27 @@ createChild loc id srcCode = do
         then do
           generate ("GRPGenome" ++ show id ++ ".hs")
           return [Node (ActiveI id (Unchecked, 0.0) ("./GRPGenome" ++ show id)) []]
-        else trace ("runtime error was: " ++ err) return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []] --TODO: confirm whether this works. We shouldn't leak any IDs anymore
+        else trace ("runtime error was: " ++ err) return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
   newElem <- mkChild (rootLabel $ tree loc) id srcCode -- rootlabel . tree == label ?
   return (modifyTree (\(Node a subnodes) -> Node a (newElem ++ subnodes)) loc)
 
-filterPool :: Pool -> (Pool, [String])
-filterPool (Pool name it max min nID population) =
-  if length (filter (\i -> case i of JunkI _ _ -> False; _ -> True) $ flatten population) > min
-  then (Pool name it max min nID updatedPopulation  , fileremovals)
-  else (Pool name it max min nID updatedPopulation' , fileremovals)
+filterPool :: Int -> Tree (Individual, Float) -> (Tree Individual, [String])
+filterPool min genomesAndFitness = --(fmap fst genomesAndFitness, [])
+  if length (filter (\i -> case i of JunkI _ _ -> False; _ -> True) $ flatten pop) > min
+  then (fmap fst reducedPop, fileremovals)
+  else (nonReducedPop, fileremovals)
   where
-    (updPopAndFileRemovals) = fmap removeJunk population
-    updatedPopulation' = fmap fst updPopAndFileRemovals
-    fileremovals = flatten $ fmap snd updPopAndFileRemovals
-    threshold          = getFitness $ (!!) (sortBy (flip compare) (flatten population)) (min - 1)
+    pop = fmap fst genomesAndFitness
+    fit = fmap snd genomesAndFitness
+    (updPopAndFileRemovals) = fmap (\(gen,fit) -> (removeJunk gen, fit)) genomesAndFitness
+    reducedPop :: Tree (Individual, Float)
+    reducedPop = fmap (\((ugen, mFile), fit) -> (ugen, fit)) updPopAndFileRemovals
+    fileremovals :: [String]
+    fileremovals = catMaybes $ flatten $ fmap (snd . fst) updPopAndFileRemovals
+    threshold :: Float
+    threshold = snd $ Data.List.last $ take (min) (sortBy (flip (comparing snd)) (flatten reducedPop))--TODO: Test
     --this labels individuals as inactive.
-    --TODO: This should not go by fitness, but by regressed features
-    updatedPopulation  = fmap (updateIndividual threshold) updatedPopulation'
+    nonReducedPop = fmap (\(ind, fit) -> if fit > threshold then setActive ind else setInactive ind) reducedPop
 
 --this function is going to become tricky later on. Right now, it's just a plain old
 --map over the tree structure, but later we'll do a traversion of the neighborhood

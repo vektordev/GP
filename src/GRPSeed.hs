@@ -12,7 +12,7 @@ import System.Random
 import Data.Maybe (isJust, fromJust)
 import Data.List
 import GRPCommon
-import Language.Haskell.Exts.Parser
+import Language.Haskell.Exts.Parser -- limit those imports.
 
 reprogram :: [StdGen] -> State -> [String] -> (String, State)
 act :: [StdGen] -> State -> Input -> (Output, State)
