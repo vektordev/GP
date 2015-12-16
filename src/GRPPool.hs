@@ -72,6 +72,7 @@ data Pool = Pool {
 data FeatureVec = FeatureVec {
   id :: Int
 , parentid :: Int
+, isLocalMax :: Bool
 , generation :: Int
 , fitness :: Float
 , fitnessGainSinceParent :: Float
@@ -233,31 +234,29 @@ getID loc = case label loc of
 --  mapping over the tree
 getFeatures :: TreePos Full Individual -> Maybe FeatureVec
 getFeatures zipperLoc = case label zipperLoc of
-  ActiveI id (Compilation, fit) path -> Just (FeatureVec
-      (Main.getID zipperLoc)
-      (maybe (-1) Main.getID (parent zipperLoc))
-      (getGeneration zipperLoc)
-      fit
-      (maybe 0 (\tp -> fit - (snd $ getFitness $ label tp)) (parent zipperLoc))
-      (if (length offspringC + length offspringNC) == 0 then 0%1 else ((toInteger $ length offspringC) % (toInteger $ length offspringC + length offspringNC)))
-      (length offspringC + length offspringNC)
-      (if null offspringC then 0 else mean $ map (snd . getFitness) offspringC)
-    )
-    where (offspringC, offspringNC) =
-            partition (\i -> (Compilation, -1.0 * (2^127)) <= getFitness i) $ map rootLabel $ subForest $ tree zipperLoc
-  InactiveI id (Compilation, fit) _ -> Just (FeatureVec
-      (Main.getID zipperLoc)
-      (maybe (-1) Main.getID (parent zipperLoc))
-      (getGeneration zipperLoc)
-      fit
-      (maybe 0 (\tp -> fit - (snd $ getFitness $ label tp)) (parent zipperLoc))
-      (if (length offspringC + length offspringNC) == 0 then 0%1 else ((toInteger $ length offspringC) % (toInteger $ (length offspringC + length offspringNC))))
-      (length offspringC + length offspringNC)
-      (if null offspringC then 0 else mean $ map (snd . getFitness) offspringC)
-    )
-    where (offspringC, offspringNC) =
-            partition (\i -> (Compilation, -1.0 * (2^127)) <= getFitness i) $ map rootLabel $ subForest $ tree zipperLoc
+  ActiveI id (Compilation, fit) _ -> Just computeFeatures
+  InactiveI id (Compilation, fit) _ -> Just computeFeatures
   _ -> Nothing
+  where
+    --TODO
+    isLocalMax loc = (compilationRate computeFeatures > 1%8) || (maybe False isLocalMax $ parent loc)
+    computeFeatures =
+      (FeatureVec
+        (Main.getID zipperLoc)
+        (maybe (-1) Main.getID (parent zipperLoc))
+        (isLocalMax zipperLoc)
+        --(if (length offspringC + length offspringNC) == 0 then False else ((toInteger $ length offspringC) % (toInteger $ (length offspringC + length offspringNC))) > 1 % 8)
+        (getGeneration zipperLoc)
+        (snd $ getFitness $ label zipperLoc)
+        (maybe 0 (\tp -> (snd $ getFitness $ label zipperLoc) - (snd $ getFitness $ label tp)) (parent zipperLoc))
+        (if (length offspringC + length offspringNC) == 0 then 0%1 else ((toInteger $ length offspringC) % (toInteger $ (length offspringC + length offspringNC))))
+        (length offspringC + length offspringNC)
+        (if null offspringC then 0 else mean $ map (snd . getFitness) offspringC)
+      )
+    (offspringC, offspringNC) =
+      partition
+        (\i -> (Compilation, -1.0 * (2^127)) <= getFitness i)
+        $ map rootLabel $ subForest $ tree zipperLoc
 
 getGeneration :: TreePos Full Individual -> Int
 getGeneration loc = case parent loc of
@@ -284,12 +283,11 @@ extractFromTreeContext f as = extractChildren f $ fromTree as
 getWeights :: Tree Individual -> Tree Float
 getWeights individuals = fmap (maybe 0 regressRateOnly) $ extractFromTreeContext (\ind -> case label ind of InactiveI _ _ _ -> Nothing; _ -> getFeatures ind) individuals
   where
-    regress (FeatureVec _ _ generation fit fitgain compilationrate chdren avgchildfit) =
+    regress (FeatureVec _ _ localMax generation fit fitgain compilationrate chdren avgchildfit) =
       (abs fit + 10 * fitgain + abs (fromRational compilationrate)) * fromIntegral generation
     --add 1 to numerator, so we remove some sampling bias. Respects fitness a tiny bit. Eliminates extremely high compilation rates, which indicate local max.
-    regressRateOnly (FeatureVec id _ generation fit fitgain compilationrate chdren avgchildfit) =
-      (fromRational (((compilationrate * (fromIntegral chdren%1)) + 1) / ((fromIntegral chdren%1)+1)) + 0.005 * fit)
-        * (if compilationrate > 1%10 then trace ("unusually high compilation rate in genome " ++ show id) (if compilationrate > 1 % 5 then trace "labelling as local max" 0 else 1) else 1 )
+    regressRateOnly (FeatureVec id _ localMax generation fit fitgain compilationrate chdren avgchildfit) =
+      if localMax then 0 else (fromRational (((compilationrate * (fromIntegral chdren%1)) + 1) / ((fromIntegral chdren%1)+1)) + 0.005 * fit)
 
 refillPool :: Pool -> IO Pool
 refillPool (Pool name it max gain nxt genomes) = do
