@@ -24,10 +24,12 @@ variance lst =
 
 --TODO: diversity metric: ForAll pair of individuals, calculate distance to common ancestor, sum up.
 
+rawHistogram :: Ord t => [t] -> [(Int, t)]
 rawHistogram lst = map (\lst -> (length lst, head lst)) $ group $ sort lst
 
---discretizeHistogram :: [(Int, t)] -> t -> [(Int, (t,t))]
-discretizeHistogram :: Float -> [(Int, Float)] -> [(Int, (Float, Float))]
+discretizeHistogram
+  :: (Enum a1, Eq a, Num a, Num a1, Ord a1) =>
+     a1 -> [(a, a1)] -> [(a, (a1, a1))]
 discretizeHistogram step hist =
   let
     intervalDelim = [snd $ head hist, (snd (head hist) + step).. (snd (last hist) + step)] --(snd (last hist) + step)]
@@ -42,7 +44,7 @@ discretizeHistogram step hist =
   in
     dropWhile (\x -> fst x == 0) $ reverse $ dropWhile (\x -> fst x == 0) $ foldl zipping [] (sortBy (comparing (either id snd)) (map Left intervalDelim ++ map Right hist))
 
---do p <- loadFromFile "wedevetest-301"; putStrLn $ show $ rawHistogram $ map fitness $ flatten $ genomes p
+--do p <- loadFromFile "wedevetest-301"; sequence map print $ rawHistogram $ map fitness $ flatten $ genomes p
 --do p <- loadFromFile "wedevetest-301"; putStrLn $ show $ rawHistogram  $ map compilationRate $ catMaybes $ iterateTZipper getFeatures $ fromTree $ genomes p
 --do p <- loadFromFile "/home/viktor/Dropbox/GA/data/wedtest-241"; putStrLn $ show $ discretizeHistogram 0.01 $ rawHistogram $ map (snd . getFitness) $ filter (\i -> (fst $ getFitness i) == Compilation) $ flatten $ genomes p
 

@@ -1,3 +1,12 @@
+module GRPPool
+( Pool (Pool)
+, FeatureVec (FeatureVec)
+, loadFromFile
+, initialPool
+, runPool
+, truncateP
+) where
+
 --import GRPStats
 import GRPFitness
 import GRPGenerator
@@ -8,8 +17,6 @@ import System.IO.Strict(readFile)
 import System.Process (readProcessWithExitCode)
 import System.Exit (ExitCode(..))
 import System.Directory (removeFile)
-import System.Environment (getArgs)
-import System.IO
 
 import Data.Tree
 import Data.Tree.Zipper
@@ -47,8 +54,7 @@ data Pool = Pool {
   iterations :: Int,
   maxSize :: Int,
   filteredSize :: Int,
-  nextID :: Int, -- since we're a bit generous with these, we need to count genomes otherwise.
-  --so some general statistics would be in order.
+  nextID :: Int,
   genomes :: Tree Individual
 } deriving (Show, Read)
 
@@ -81,31 +87,9 @@ data FeatureVec = FeatureVec {
 , avgChildFit :: Float
 } deriving (Show, Read)
 
---TODO: Optimization flag in build script
-
---TODO: Pool needs to respect InactiveI or ActiveI status.
+--TODO: Pool needs to respect InactiveI or ActiveI status. Relevant in refillPool, mostly
 
 --TODO: Pool needs to make InactiveI/ActiveI decision dependant on regressed features.
-
-main = do
-  hSetBuffering stdout LineBuffering
-  args <- getArgs
-  processArgs args
-  stopGlobalPool --stops the thread pool
-
---syntax: --start m n name --iterations i --no-output
---syntax: --load path --iterations 0
---syntax: --testrun
---syntax: --truncate path newname --iterations n
-processArgs :: [String] -> IO ()
-processArgs ["--testrun"] = testrun
-processArgs ("--start" : gain : min : name : "--iterations" : it : options) =
-  initialPool (read gain) (read min) name  >>= runPool (read it) options
-processArgs ("--load"  : path              : "--iterations" : it : options) =
-  loadFromFile path                        >>= runPool (read it) options
-processArgs ("--truncate" : path : newname : "--iterations" : it : options) =
-  loadFromFile path >>= truncateP newname  >>= runPool (read it) options
-processArgs _ = putStrLn "invalid operands.\nOperands are:\n  --testrun\n  --start max min name --iterations n [--no-output]\n  --load path --iter...\n  --truncate path newname --iter..."
 
 output :: Pool -> IO()
 output p = do
@@ -130,13 +114,6 @@ getDotFile pool = unlines (["strict graph network{"] ++ edges ( genomes pool) ++
     edges (Node a chdren) = concatMap edges chdren ++ map (edge a . rootLabel) chdren
     edge i1 i2 = 'n':(show $ GRPIndividual.getID i1) ++ "--" ++ 'n':(show $ GRPIndividual.getID i2) ++ ";"
     nodes gens = map (\gen -> 'n':((show $ GRPIndividual.getID gen) ++ "[label=" ++ (show $ show $ getFitness gen) ++ "];")) $ flatten gens
-
-testrun :: IO()
-testrun = do
-  putStrLn "Starting test run."
-  ip <- initialPool 100 50 "defaultTest"
-  runPool 3 [] ip
-  putStrLn "Done!"
 
 runPool :: Int -> [String] -> Pool -> IO ()
 runPool it options pool = do
@@ -242,8 +219,8 @@ getFeatures zipperLoc = case label zipperLoc of
     isLocalMax loc = (compilationRate computeFeatures > 1%8) || (maybe False isLocalMax $ parent loc)
     computeFeatures =
       (FeatureVec
-        (Main.getID zipperLoc)
-        (maybe (-1) Main.getID (parent zipperLoc))
+        (GRPPool.getID zipperLoc)
+        (maybe (-1) GRPPool.getID (parent zipperLoc))
         (isLocalMax zipperLoc)
         --(if (length offspringC + length offspringNC) == 0 then False else ((toInteger $ length offspringC) % (toInteger $ (length offspringC + length offspringNC))) > 1 % 8)
         (getGeneration zipperLoc)
