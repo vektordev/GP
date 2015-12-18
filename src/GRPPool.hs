@@ -1,10 +1,16 @@
 module GRPPool
-( Pool (Pool)
-, FeatureVec (FeatureVec)
+( Pool (..)
+, FeatureVec (..)
 , loadFromFile
 , initialPool
 , runPool
 , truncateP
+, iterateTZipper
+, getFeatures
+, zipTreeWith
+, getWeights
+, extractFromTreeContext
+, regressRateOnly
 ) where
 
 --import GRPStats
@@ -78,6 +84,7 @@ data Pool = Pool {
 data FeatureVec = FeatureVec {
   id :: Int
 , parentid :: Int
+, state :: State
 , isLocalMax :: Bool
 , generation :: Int
 , fitness :: Float
@@ -86,6 +93,13 @@ data FeatureVec = FeatureVec {
 , children :: Int
 , avgChildFit :: Float
 } deriving (Show, Read)
+
+data State = Active | Inactive | Junk deriving (Show, Read)
+
+--TODO: FeatureVec now has Active/Inactive/Junk.
+--  Feature extraction should be agnostic of Individual state now,
+--  as should be regression. Regression should be local-max agnostic.
+--  Only when regression results are applied to shaping reproduction, these should be considered.
 
 --TODO: Pool needs to respect InactiveI or ActiveI status. Relevant in refillPool, mostly
 
@@ -211,16 +225,18 @@ getID loc = case label loc of
 --  mapping over the tree
 getFeatures :: TreePos Full Individual -> Maybe FeatureVec
 getFeatures zipperLoc = case label zipperLoc of
-  ActiveI id (Compilation, fit) _ -> Just computeFeatures
-  InactiveI id (Compilation, fit) _ -> Just computeFeatures
+  ActiveI id (Compilation, fit) _ -> Just $ computeFeatures Active
+  InactiveI id (Compilation, fit) _ -> Just $ computeFeatures Inactive
   _ -> Nothing
   where
     --TODO
-    isLocalMax loc = (compilationRate computeFeatures > 1%8) || (maybe False isLocalMax $ parent loc)
-    computeFeatures =
+    isLocalMax loc = (compilationRate (computeFeatures Active) >= 1%6) || (maybe False isLocalMax $ parent loc)
+    computeFeatures :: State -> FeatureVec
+    computeFeatures state =
       (FeatureVec
         (GRPPool.getID zipperLoc)
         (maybe (-1) GRPPool.getID (parent zipperLoc))
+        (state)
         (isLocalMax zipperLoc)
         --(if (length offspringC + length offspringNC) == 0 then False else ((toInteger $ length offspringC) % (toInteger $ (length offspringC + length offspringNC))) > 1 % 8)
         (getGeneration zipperLoc)
@@ -259,12 +275,14 @@ extractFromTreeContext f as = extractChildren f $ fromTree as
 
 getWeights :: Tree Individual -> Tree Float
 getWeights individuals = fmap (maybe 0 regressRateOnly) $ extractFromTreeContext (\ind -> case label ind of InactiveI _ _ _ -> Nothing; _ -> getFeatures ind) individuals
-  where
-    regress (FeatureVec _ _ localMax generation fit fitgain compilationrate chdren avgchildfit) =
-      (abs fit + 10 * fitgain + abs (fromRational compilationrate)) * fromIntegral generation
-    --add 1 to numerator, so we remove some sampling bias. Respects fitness a tiny bit. Eliminates extremely high compilation rates, which indicate local max.
-    regressRateOnly (FeatureVec id _ localMax generation fit fitgain compilationrate chdren avgchildfit) =
-      if localMax then 0 else (fromRational (((compilationrate * (fromIntegral chdren%1)) + 1) / ((fromIntegral chdren%1)+1)) + 0.005 * fit)
+
+regress :: FeatureVec -> Float
+regress (FeatureVec _ _ state localMax generation fit fitgain compilationrate chdren avgchildfit) =
+  (abs fit + 10 * fitgain + abs (fromRational compilationrate)) * fromIntegral generation
+--add 1 to numerator, so we remove some sampling bias. Respects fitness a tiny bit. Eliminates extremely high compilation rates, which indicate local max.
+regressRateOnly :: FeatureVec -> Float
+regressRateOnly (FeatureVec id _ state localMax generation fit fitgain compilationrate chdren avgchildfit) =
+  if localMax then 0 else (fromRational (((compilationrate * (fromIntegral chdren%1)) + 1) / ((fromIntegral chdren%1)+1)) + 0.02 * fit)
 
 refillPool :: Pool -> IO Pool
 refillPool (Pool name it max gain nxt genomes) = do
