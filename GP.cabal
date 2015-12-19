@@ -8,7 +8,7 @@ synopsis:            reflective genetic programming
 homepage:            github.com/vektordev/GP
 license:             GPL-2
 license-file:        LICENSE
-author:              vektordev
+author:              vpfanschilling@gmail.com
 maintainer:          vpfanschilling@gmail.com
 -- copyright:
 -- category:
@@ -17,7 +17,17 @@ extra-source-files:  README.md
 cabal-version:       >=1.10
 
 executable GP
-  main-is:             GRPPool.hs
+  main-is:             Main.hs
+  ghc-options:         -O2 -threaded
+  -- other-modules:
+  other-extensions:    Safe
+  build-depends:       base >=4.8 && <4.9, random >=1.1 && <1.2, directory >=1.2 && <1.3, process >=1.2 && <1.3, containers >=0.5 && <0.6, rosezipper >=0.2 && <0.3, parallel-io >=0.3 && <0.4, haskell-src-exts >=1.16 && <1.17, strict >=0.3, split >=0.2, gloss >=1.9.4.1
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+
+executable GP-prof
+  main-is:             Main.hs
+  ghc-options:         -O2 -threaded -fprof-auto "-with-rtsopts=-N -p -s -h -i0.1" -auto-all
   -- other-modules:
   other-extensions:    Safe
   build-depends:       base >=4.8 && <4.9, random >=1.1 && <1.2, directory >=1.2 && <1.3, process >=1.2 && <1.3, containers >=0.5 && <0.6, rosezipper >=0.2 && <0.3, parallel-io >=0.3 && <0.4, haskell-src-exts >=1.16 && <1.17, strict >=0.3, split >=0.2, gloss >=1.9.4.1

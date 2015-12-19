@@ -47,13 +47,13 @@ updateIndividual thres (JunkI     i f)      = JunkI i f
 updateIndividual thres (ActiveI   i f path) = if f >= thres then ActiveI i f path else InactiveI i f path
 updateIndividual thres (InactiveI i f path) = if f >= thres then ActiveI i f path else InactiveI i f path
 
-setActive :: Individual -> Individual
-setActive (InactiveI i f path) = ActiveI i f path
-setActive ind = ind
+setActive :: Individual -> (Individual, [FilePath], Maybe FilePath)
+setActive (InactiveI i f path) = (ActiveI i f path, [], Just $ path ++ "hl.hs")
+setActive ind = (ind, [], Nothing)
 
-setInactive :: Individual -> Individual
-setInactive (ActiveI i f path) = InactiveI i f path
-setInactive ind = ind
+setInactive :: Individual -> (Individual, [FilePath], Maybe FilePath)
+setInactive (ActiveI i f path) = (InactiveI i f path, [path ++ "hl"], Nothing)
+setInactive ind = (ind, [], Nothing)
 
 removeJunk :: Individual -> (Individual, Maybe String)
 removeJunk ind@(ActiveI i (Compilation, f2) p) = (ind, Nothing)

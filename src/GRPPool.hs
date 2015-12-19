@@ -180,12 +180,18 @@ iteratePool it options p = do
   putStrLn ("Starting iteration " ++ show (iterations p))
   rp <- refillPool p
   ep <- evaluateFitness rp
-  let (newPop, rmpaths) = filterPool (filteredSize ep) $ zipTreeWith (\a b -> (a,b)) (genomes ep) (getWeights $genomes ep)
+  let (newPop, rmpaths, recompilations) = filterPool (filteredSize ep) $ zipTreeWith (\a b -> (a,b)) (genomes ep) (getWeights $genomes ep)
+  recompile recompilations
   cleanup rmpaths
   iteratePool (it-1) options ep{iterations = iterations ep +1, genomes = newPop}
 
 zipTreeWith :: (a -> b -> c) -> Tree a -> Tree b -> Tree c
 zipTreeWith func (Node elA subforestA) (Node elB subforestB) = Node (func elA elB) $ zipWith (zipTreeWith func) subforestA subforestB
+
+recompile :: [String] -> IO()
+recompile paths = do
+  _ <- parallel $ map (\path -> do (code, out, err) <- readProcessWithExitCode "ghc" [path] []; return ()) paths
+  return ()
 
 --TODO:
 --Changes some labels around: keeps min Individuals active
@@ -257,7 +263,7 @@ getGeneration loc = case parent loc of
   Just loc2 -> 1 + getGeneration loc2
 
 cleanup :: [String] -> IO()
-cleanup [] = return ()
+cleanup [] = return () --TODO: rm GRPGenome*.o GRPGEnome*.hi
 cleanup ("":xs) = cleanup xs
 cleanup (x:xs) = do
   System.Directory.removeFile (x ++".hs")
@@ -358,28 +364,32 @@ createChild loc id srcCode = do
   newElem <- mkChild (rootLabel $ tree loc) id srcCode -- rootlabel . tree == label ?
   return (modifyTree (\(Node a subnodes) -> Node a (newElem ++ subnodes)) loc)
 
-filterPool :: Int -> Tree (Individual, Float) -> (Tree Individual, [String])
+filterPool :: Int -> Tree (Individual, Float) -> (Tree Individual, [String], [String])
 filterPool min genomesAndFitness = --(fmap fst genomesAndFitness, [])
   if length (filter (\i -> case i of JunkI _ _ -> False; _ -> True) $ flatten pop) > min
-  then (fmap fst reducedPop, fileremovals)
-  else (nonReducedPop, fileremovals)
+  then (fmap fst reducedPop, fileremovals, recompilations)
+  else (fmap (\(a,_,_)-> a) result, fileremovals, recompilations)
   where
     pop = fmap fst genomesAndFitness
     fit = fmap snd genomesAndFitness
     (updPopAndFileRemovals) = fmap (\(gen,fit) -> (removeJunk gen, fit)) genomesAndFitness
     reducedPop :: Tree (Individual, Float)
     reducedPop = fmap (\((ugen, mFile), fit) -> (ugen, fit)) updPopAndFileRemovals
-    fileremovals :: [String]
-    fileremovals = catMaybes $ flatten $ fmap (snd . fst) updPopAndFileRemovals
     threshold :: Float
     threshold = snd $ Data.List.last $ take (min) (sortBy (flip (comparing snd)) (flatten reducedPop))--TODO: Test
     --this labels individuals as inactive.
-    nonReducedPop = fmap (\(ind, fit) -> if fit > threshold then setActive ind else setInactive ind) reducedPop
+    --TODO: labelling as inactive should go along with deleting all compilation results.
+    --labelling as active should go along with recompilation.
+    result = fmap (\(ind, fit) -> if fit > threshold then setActive ind else setInactive ind) reducedPop
+    recompilations = catMaybes $ flatten $ fmap (\(a,b,c) -> c) result
+    fileremovals :: [String]
+    fileremovals = (catMaybes $ flatten $ fmap (snd . fst) updPopAndFileRemovals) ++ (concat $ flatten $ fmap (\(a,b,c)-> b) result)
 
 --this function is going to become tricky later on. Right now, it's just a plain old
 --map over the tree structure, but later we'll do a traversion of the neighborhood
 --for every node considered.
 --also, Fitness is likely to not cut it anymore later on as a type.
+--TODO: parallel *should* really be defined in terms of Traversable, rather than []
 evaluateFitness :: Pool -> IO Pool
 evaluateFitness pool = do
   let evalTree (Node a as) = do ind <-evalIndividual a; inds <- parallel $ map evalTree as; return (Node ind inds)

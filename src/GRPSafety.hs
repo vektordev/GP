@@ -23,6 +23,7 @@ getSafeLines source =
     safeLinesFromValue = [lines source !! (safeLinesCount - 1)]
   in if safeLinesInSource /= safeLinesFromValue then Nothing else Just safeLinesCount
 
+--TODO: Optimization: refactor the following into a function that returns a Maybe (String, String) split in prefix and suffix
 getSafetyPrefix :: String -> Maybe String
 getSafetyPrefix source = fmap (\sl -> unlines $ take sl $ lines source) $ getSafeLines source
 
