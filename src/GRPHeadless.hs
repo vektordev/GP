@@ -46,7 +46,7 @@ fitnessEval statFile = do
   let oldStats = read file :: Individual
   (newFit, newState) <- computeProblemFitness Genome.act []
   putStrLn ("newFit = " ++ show newFit)
-  let newStats = setFitness oldStats (Compilation, newFit)--AgentStats (source oldStats) (Compilation, newFit) (ancestry oldStats) (generation oldStats) newState False (evaluatedChildren oldStats) (compiledChildren oldStats) :: AgentStats
+  let newStats = setFitness oldStats (Compilation, newFit)
   writeFile (statFile ++ "~") $show newStats
   renameFile (statFile ++ "~") statFile
   --TODO2: verify correct copying

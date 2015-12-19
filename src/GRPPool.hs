@@ -184,6 +184,7 @@ iteratePool it options p = do
   let (newPop, rmgenomes, recompilations, rmfiles) = filterPool (filteredSize ep) $ zipTreeWith (\a b -> (a,b)) (genomes ep) (getRegressedFeatures $genomes ep)
   recompile recompilations
   cleanup rmgenomes
+  putStrLn ("deleting files: " ++ show rmfiles)
   sequence $ fmap System.Directory.removeFile rmfiles
   iteratePool (it-1) options ep{iterations = iterations ep +1, genomes = newPop}
 
@@ -372,10 +373,12 @@ createChild loc id srcCode = do
         then do
           generate ("GRPGenome" ++ show id ++ ".hs")
           return [Node (ActiveI id (Unchecked, 0.0) ("./GRPGenome" ++ show id)) []]
-        else trace ("runtime error was: " ++ err) return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
+        else trace ("runtime error was: " ++ err ++ "\nOutput was" ++ out) return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
   newElem <- mkChild (rootLabel $ tree loc) id srcCode -- rootlabel . tree == label ?
   return (modifyTree (\(Node a subnodes) -> Node a (newElem ++ subnodes)) loc)
 
+--generates, from a lower bound on ActiveIs in the Pool and a Pool's genomes:
+--  The updated Tree, with only min ActiveIs.
 filterPool :: Int -> Tree (Individual, Float) -> (Tree Individual, [String], [String], [String])
 filterPool min genomesAndFitness = --(fmap fst genomesAndFitness, [])
   if length (filter (\i -> case i of JunkI _ _ -> False; _ -> True) $ flatten pop) > min
@@ -390,9 +393,6 @@ filterPool min genomesAndFitness = --(fmap fst genomesAndFitness, [])
     reducedPop = fmap (\((ugen, mFile), fit) -> (ugen, fit)) updPopAndFileRemovals
     threshold :: Float
     threshold = snd $ Data.List.last $ take (min) (sortBy (flip (comparing snd)) (flatten reducedPop))--TODO: Test
-    --this labels individuals as inactive.
-    --TODO: labelling as inactive should go along with deleting all compilation results.
-    --labelling as active should go along with recompilation.
     result = fmap (\(ind, fit) -> if fit > threshold then setActive ind else setInactive ind) reducedPop
     recompilations = catMaybes $ flatten $ fmap (\(a,b,c) -> c) result
     fileremovals :: [String]
