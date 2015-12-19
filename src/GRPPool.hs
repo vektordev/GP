@@ -100,6 +100,7 @@ data State = Active | Inactive | Junk deriving (Eq, Show, Read)
 --  Feature extraction should be agnostic of Individual state now,
 --  as should be regression. Regression should be local-max agnostic.
 --  Only when regression results are applied to shaping reproduction, these should be considered.
+--    Has been implemented. Review required.
 
 --TODO: Pool needs to respect InactiveI or ActiveI status. Relevant in refillPool, mostly
 
@@ -180,9 +181,10 @@ iteratePool it options p = do
   putStrLn ("Starting iteration " ++ show (iterations p))
   rp <- refillPool p
   ep <- evaluateFitness rp
-  let (newPop, rmpaths, recompilations) = filterPool (filteredSize ep) $ zipTreeWith (\a b -> (a,b)) (genomes ep) (getRegressedFeatures $genomes ep)
+  let (newPop, rmgenomes, recompilations, rmfiles) = filterPool (filteredSize ep) $ zipTreeWith (\a b -> (a,b)) (genomes ep) (getRegressedFeatures $genomes ep)
   recompile recompilations
-  cleanup rmpaths
+  cleanup rmgenomes
+  sequence $ fmap System.Directory.removeFile rmfiles
   iteratePool (it-1) options ep{iterations = iterations ep +1, genomes = newPop}
 
 zipTreeWith :: (a -> b -> c) -> Tree a -> Tree b -> Tree c
@@ -374,15 +376,16 @@ createChild loc id srcCode = do
   newElem <- mkChild (rootLabel $ tree loc) id srcCode -- rootlabel . tree == label ?
   return (modifyTree (\(Node a subnodes) -> Node a (newElem ++ subnodes)) loc)
 
-filterPool :: Int -> Tree (Individual, Float) -> (Tree Individual, [String], [String])
+filterPool :: Int -> Tree (Individual, Float) -> (Tree Individual, [String], [String], [String])
 filterPool min genomesAndFitness = --(fmap fst genomesAndFitness, [])
   if length (filter (\i -> case i of JunkI _ _ -> False; _ -> True) $ flatten pop) > min
-  then (fmap fst reducedPop, fileremovals, recompilations)
-  else (fmap (\(a,_,_)-> a) result, fileremovals, recompilations)
+  then (fmap fst reducedPop, genomeRemovals, recompilations, fileremovals)
+  else (fmap (\(a,_,_)-> a) result, genomeRemovals, recompilations, fileremovals)
   where
     pop = fmap fst genomesAndFitness
     fit = fmap snd genomesAndFitness
     (updPopAndFileRemovals) = fmap (\(gen,fit) -> (removeJunk gen, fit)) genomesAndFitness
+    genomeRemovals = catMaybes $ flatten $ fmap (snd . fst) updPopAndFileRemovals
     reducedPop :: Tree (Individual, Float)
     reducedPop = fmap (\((ugen, mFile), fit) -> (ugen, fit)) updPopAndFileRemovals
     threshold :: Float
@@ -393,7 +396,7 @@ filterPool min genomesAndFitness = --(fmap fst genomesAndFitness, [])
     result = fmap (\(ind, fit) -> if fit > threshold then setActive ind else setInactive ind) reducedPop
     recompilations = catMaybes $ flatten $ fmap (\(a,b,c) -> c) result
     fileremovals :: [String]
-    fileremovals = (catMaybes $ flatten $ fmap (snd . fst) updPopAndFileRemovals) ++ (concat $ flatten $ fmap (\(a,b,c)-> b) result)
+    fileremovals = (concat $ flatten $ fmap (\(a,b,c)-> b) result)
 
 --this function is going to become tricky later on. Right now, it's just a plain old
 --map over the tree structure, but later we'll do a traversion of the neighborhood
