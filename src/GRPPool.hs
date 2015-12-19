@@ -8,9 +8,9 @@ module GRPPool
 , iterateTZipper
 , getFeatures
 , zipTreeWith
-, getWeights
+, getRegressedFeatures
 , extractFromTreeContext
-, regressRateOnly
+, activeRegression
 ) where
 
 --import GRPStats
@@ -94,7 +94,7 @@ data FeatureVec = FeatureVec {
 , avgChildFit :: Float
 } deriving (Show, Read)
 
-data State = Active | Inactive | Junk deriving (Show, Read)
+data State = Active | Inactive | Junk deriving (Eq, Show, Read)
 
 --TODO: FeatureVec now has Active/Inactive/Junk.
 --  Feature extraction should be agnostic of Individual state now,
@@ -107,7 +107,7 @@ data State = Active | Inactive | Junk deriving (Show, Read)
 
 output :: Pool -> IO()
 output p = do
-  writeFile (getUniqueName p ++ "-fitness") $ unlines $ map show $ sortBy (\(x,y) (x2,y2) -> compare (x, getFitness y) (x2, getFitness y2)) (zip (flatten $ getWeights $ genomes p) (flatten $ genomes p))
+  writeFile (getUniqueName p ++ "-fitness") $ unlines $ map show $ sortBy (\(x,y) (x2,y2) -> compare (x, getFitness y) (x2, getFitness y2)) (zip (flatten $ getRegressedFeatures $ genomes p) (flatten $ genomes p))
   writeFile (getUniqueName p ++ "-features") $ getFormattedFeatureDump p
   writeFile (getUniqueName p ++ ".dot") $ getDotFile p
   writeFile (getUniqueName p ++ "-summary") $ getSummary p
@@ -150,8 +150,8 @@ initialPool gain min name = do
 
 truncateP :: String -> Pool -> IO Pool
 truncateP newname pool = do
-  let bestFit = maximum $ flatten $ getWeights (genomes pool) :: Float
-  let rootInd = ( fmap snd $ find (\x -> bestFit == fst x) (zip (flatten $ getWeights (genomes pool)) $ flatten $ genomes pool) ) :: Maybe Individual
+  let bestFit = maximum $ flatten $ getRegressedFeatures (genomes pool) :: Float
+  let rootInd = ( fmap snd $ find (\x -> bestFit == fst x) (zip (flatten $ getRegressedFeatures (genomes pool)) $ flatten $ genomes pool) ) :: Maybe Individual
   let filepath = fromMaybe "" $ maybe Nothing path rootInd
   src <- System.IO.Strict.readFile (filepath ++ ".hs") --goes boom if any of the above fails.
   (code, out, err) <- readProcessWithExitCode "./soft-cleanup.sh" [] ""
@@ -180,7 +180,7 @@ iteratePool it options p = do
   putStrLn ("Starting iteration " ++ show (iterations p))
   rp <- refillPool p
   ep <- evaluateFitness rp
-  let (newPop, rmpaths, recompilations) = filterPool (filteredSize ep) $ zipTreeWith (\a b -> (a,b)) (genomes ep) (getWeights $genomes ep)
+  let (newPop, rmpaths, recompilations) = filterPool (filteredSize ep) $ zipTreeWith (\a b -> (a,b)) (genomes ep) (getRegressedFeatures $genomes ep)
   recompile recompilations
   cleanup rmpaths
   iteratePool (it-1) options ep{iterations = iterations ep +1, genomes = newPop}
@@ -229,13 +229,14 @@ getID loc = case label loc of
 --  A lot of this will just calculate the same thing that we have already
 --  calculated in the call for another node. This could be helped by first
 --  mapping over the tree
+--TODO: Also, this needn't be a Maybe Function. Just need to put the fitness and fitgain values to zero if it's not compiling
 getFeatures :: TreePos Full Individual -> Maybe FeatureVec
 getFeatures zipperLoc = case label zipperLoc of
   ActiveI id (Compilation, fit) _ -> Just $ computeFeatures Active
   InactiveI id (Compilation, fit) _ -> Just $ computeFeatures Inactive
+  JunkI id (Compilation, fit) -> Just $ computeFeatures Junk
   _ -> Nothing
   where
-    --TODO
     isLocalMax loc = (compilationRate (computeFeatures Active) >= 1%6) || (maybe False isLocalMax $ parent loc)
     computeFeatures :: State -> FeatureVec
     computeFeatures state =
@@ -246,8 +247,8 @@ getFeatures zipperLoc = case label zipperLoc of
         (isLocalMax zipperLoc)
         --(if (length offspringC + length offspringNC) == 0 then False else ((toInteger $ length offspringC) % (toInteger $ (length offspringC + length offspringNC))) > 1 % 8)
         (getGeneration zipperLoc)
-        (snd $ getFitness $ label zipperLoc)
-        (maybe 0 (\tp -> (snd $ getFitness $ label zipperLoc) - (snd $ getFitness $ label tp)) (parent zipperLoc))
+        (if state == Junk then 0 else snd $ getFitness $ label zipperLoc)
+        (if state == Junk then 0 else maybe 0 (\tp -> (snd $ getFitness $ label zipperLoc) - (snd $ getFitness $ label tp)) (parent zipperLoc))
         (if (length offspringC + length offspringNC) == 0 then 0%1 else ((toInteger $ length offspringC) % (toInteger $ (length offspringC + length offspringNC))))
         (length offspringC + length offspringNC)
         (if null offspringC then 0 else mean $ map (snd . getFitness) offspringC)
@@ -279,16 +280,26 @@ extractFromTreeContext :: (TreePos Full a -> b) -> Tree a -> Tree b
 extractFromTreeContext f as = extractChildren f $ fromTree as
   where extractChildren f asZip = (Node (f asZip) [extractChildren f (fromJust $ childAt x asZip) | x <- [0..(length $ subForest $ tree asZip) - 1], isJust $ childAt x asZip])
 
+--from a Tree of Individuals, compute a tree of weights that can be used to choose parents of future genomes
 getWeights :: Tree Individual -> Tree Float
-getWeights individuals = fmap (maybe 0 regressRateOnly) $ extractFromTreeContext (\ind -> case label ind of InactiveI _ _ _ -> Nothing; _ -> getFeatures ind) individuals
+getWeights individuals = fmap (maybe 0 adaptedRegression) $ extractFromTreeContext getFeatures individuals
+  where
+    adaptedRegression fv@(FeatureVec _ _ state localMax _ _ _ _ _ _) = if state == Junk || localMax then 0 else  activeRegression fv
+
+--from a Tree of Individuals, compute a Tree of regressed feature vectors. Keep in mind that this is not pre-processed yet, and should not be used as actual weight.
+getRegressedFeatures :: Tree Individual -> Tree Float
+getRegressedFeatures individuals = fmap (maybe 0 activeRegression) $ extractFromTreeContext getFeatures individuals
+
+activeRegression = regressRateOnly
 
 regress :: FeatureVec -> Float
 regress (FeatureVec _ _ state localMax generation fit fitgain compilationrate chdren avgchildfit) =
   (abs fit + 10 * fitgain + abs (fromRational compilationrate)) * fromIntegral generation
+
 --add 1 to numerator, so we remove some sampling bias. Respects fitness a tiny bit. Eliminates extremely high compilation rates, which indicate local max.
 regressRateOnly :: FeatureVec -> Float
 regressRateOnly (FeatureVec id _ state localMax generation fit fitgain compilationrate chdren avgchildfit) =
-  if localMax then 0 else (fromRational (((compilationrate * (fromIntegral chdren%1)) + 1) / ((fromIntegral chdren%1)+1)) + 0.02 * fit)
+  fromRational (((compilationrate * (fromIntegral chdren%1)) + 1) / ((fromIntegral chdren%1)+1)) + 0.02 * fit
 
 refillPool :: Pool -> IO Pool
 refillPool (Pool name it max gain nxt genomes) = do
@@ -303,7 +314,6 @@ refillPool (Pool name it max gain nxt genomes) = do
   newGenomes <- createAllChildren genomes ticketnodes
   return $ Pool name it max gain (nxt + newGenomesCnt) newGenomes
 
---assignTickets :: Tree Int -> [Int] -> Tree [Int]
 assignTickets tree tickets =
   let (x, ticketNodes) = mapAccumR (\tickets weight -> if length tickets < weight then trace ("lacking " ++ show (weight - length tickets) ++ " tickets in assignTickets") ([], tickets) else (drop weight tickets, take weight tickets)) tickets tree
   in if null x then ticketNodes else error "Too many tickets in assignTickets"
