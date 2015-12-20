@@ -179,9 +179,10 @@ iteratePool :: Int -> [String] -> Pool -> IO Pool
 iteratePool 0 options p = return p
 iteratePool it options p = do
   putStrLn ("Starting iteration " ++ show (iterations p))
+  when (mod it 10 == 1) $ writeFile (getUniqueName p ++ "backup") (show p)
   rp <- refillPool p
   ep <- evaluateFitness rp
-  let (newPop, rmgenomes, recompilations, rmfiles) = filterPool (filteredSize ep) $ zipTreeWith (\a b -> (a,b)) (genomes ep) (getWeights $genomes ep)
+  let (newPop, rmgenomes, recompilations, rmfiles) = filterPool (filteredSize ep) $ zipTreeWith (\a b -> (a,b)) (genomes ep) (getFilterWeights $genomes ep)
   recompile recompilations
   cleanup rmgenomes
   putStrLn ("deleting files: " ++ show rmfiles)
@@ -283,11 +284,17 @@ extractFromTreeContext :: (TreePos Full a -> b) -> Tree a -> Tree b
 extractFromTreeContext f as = extractChildren f $ fromTree as
   where extractChildren f asZip = (Node (f asZip) [extractChildren f (fromJust $ childAt x asZip) | x <- [0..(length $ subForest $ tree asZip) - 1], isJust $ childAt x asZip])
 
---from a Tree of Individuals, compute a tree of weights that can be used to choose parents of future genomes
-getWeights :: Tree Individual -> Tree Float
-getWeights individuals = fmap (maybe 0 adaptedRegression) $ extractFromTreeContext getFeatures individuals
+--from a Tree of Individuals, compute a tree of weights that can be used to choose active Individuals
+getFilterWeights :: Tree Individual -> Tree Float
+getFilterWeights individuals = fmap (maybe 0 adaptedRegression) $ extractFromTreeContext getFeatures individuals
   where
     adaptedRegression fv@(FeatureVec _ _ state localMax _ _ _ _ _ _) = if state == Junk || localMax then 0 else  activeRegression fv
+
+--from a Tree of Individuals, compute a tree of weights that can be used to choose parents of this generation.
+getRefillWeights :: Tree Individual -> Tree Float
+getRefillWeights individuals = fmap (maybe 0 adaptedRegression) $ extractFromTreeContext getFeatures individuals
+  where
+    adaptedRegression fv@(FeatureVec _ _ state localMax _ _ _ _ _ _) = if state /= Active || localMax then 0 else  activeRegression fv
 
 --from a Tree of Individuals, compute a Tree of regressed feature vectors. Keep in mind that this is not pre-processed yet, and should not be used as actual weight.
 getRegressedFeatures :: Tree Individual -> Tree Float
@@ -312,7 +319,7 @@ refillPool (Pool name it max gain nxt genomes) = do
   --We definitely need to preprocess the fitness value
   -- - bare as they are, they're not really good for that purpose
   --negative weights are particularly bad. Thus: Absolute value, just to be sure.
-  let wtNodes = weightedAssign newGenomesCnt (getWeights genomes)
+  let wtNodes = weightedAssign newGenomesCnt (getRefillWeights genomes)
   let ticketnodes = fmap (\x -> zip x (repeat Nothing) ) $ assignTickets wtNodes tickets
   newGenomes <- createAllChildren genomes ticketnodes
   return $ Pool name it max gain (nxt + newGenomesCnt) newGenomes
@@ -355,7 +362,7 @@ zipperCreateLocal :: TreePos Full Individual -> [(Int, Maybe FilePath)] -> IO (T
 zipperCreateLocal t [] = return t
 zipperCreateLocal tree ((i, Nothing):ts) =
   case path $ label tree of
-    Nothing -> zipperCreateLocal tree ts
+    Nothing -> trace "illegal state in GRPPool.hs:zipperCreateLocal" $ zipperCreateLocal tree ts --ignore this individual, because it's a JunkI
     Just x ->createChild tree i x >>= flip zipperCreateLocal ts
 zipperCreateLocal tree ((i, Just path):ts) = createChild tree i path >>= flip zipperCreateLocal ts
 
