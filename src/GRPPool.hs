@@ -373,7 +373,9 @@ createChild loc id srcCode = do
         then do
           generate ("GRPGenome" ++ show id ++ ".hs")
           return [Node (ActiveI id (Unchecked, 0.0) ("./GRPGenome" ++ show id)) []]
-        else trace ("runtime error was: " ++ err ++ "\nOutput was" ++ out) return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
+        else if code == ExitFailure 124
+          then trace "Timeout on genome" $ return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
+          else trace ("runtime error was: " ++ err ++ "\nOutput was" ++ out) return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
   newElem <- mkChild (rootLabel $ tree loc) id srcCode -- rootlabel . tree == label ?
   return (modifyTree (\(Node a subnodes) -> Node a (newElem ++ subnodes)) loc)
 
@@ -381,6 +383,7 @@ createChild loc id srcCode = do
 --  The updated Tree, with only min ActiveIs.
 filterPool :: Int -> Tree (Individual, Float) -> (Tree Individual, [String], [String], [String])
 filterPool min genomesAndFitness = --(fmap fst genomesAndFitness, [])
+  --TODO: Does this filter need work?
   if length (filter (\i -> case i of JunkI _ _ -> False; _ -> True) $ flatten pop) > min
   then (fmap fst reducedPop, genomeRemovals, [], [])
   else (fmap (\(a,_,_)-> a) result, genomeRemovals, recompilations, fileremovals)

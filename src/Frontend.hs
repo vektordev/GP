@@ -37,7 +37,7 @@ summaryPrint p = Pictures [
 plotFeatures :: [Maybe FeatureVec] -> Picture
 plotFeatures fs = Pictures (map plotFeaturesSingle fs ++ axes)
   where
-    plotFeaturesSingle (Just fv) = Color (if isLocalMax fv then red else black) $ Translate (1000 * fitness fv) (100 * fromRational (compilationRate fv)) $Circle  (0.3 + regressRateOnly fv)
+    plotFeaturesSingle (Just fv) = Color (if isLocalMax fv then red else black) $ Translate (1000 * fitness fv) (100 * fromRational (compilationRate fv)) $Circle  (0.3 + activeRegression fv)
     plotFeaturesSingle _ = Blank
     axes = [Line [(0,0),(0,100), (1000,100),(1000,0),(0,0)], Line [(900,0),(900,100)]]
 
