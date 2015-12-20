@@ -175,6 +175,7 @@ poolSummary p = do
     _ -> False) genP  --(\i -> case i of JunkI _ -> False; InactiveI _ _ -> False; ActiveI Compilatio p -> ) genP
   putStrLn "---\n"
 
+--TODO: timestamp each iteration start.
 iteratePool :: Int -> [String] -> Pool -> IO Pool
 iteratePool 0 options p = return p
 iteratePool it options p = do
@@ -183,9 +184,9 @@ iteratePool it options p = do
   rp <- refillPool p
   ep <- evaluateFitness rp
   let (newPop, rmgenomes, recompilations, rmfiles) = filterPool (filteredSize ep) $ zipTreeWith (\a b -> (a,b)) (genomes ep) (getFilterWeights $genomes ep)
+  putStrLn ("recompiling files: " ++ show recompilations)
   recompile recompilations
   cleanup rmgenomes
-  putStrLn ("deleting files: " ++ show rmfiles)
   sequence $ fmap System.Directory.removeFile rmfiles
   iteratePool (it-1) options ep{iterations = iterations ep +1, genomes = newPop}
 
@@ -326,8 +327,15 @@ refillPool (Pool name it max gain nxt genomes) = do
   return $ Pool name it max gain (nxt + newGenomesCnt) newGenomes
 
 assignTickets tree tickets =
-  let (x, ticketNodes) = mapAccumR (\tickets weight -> if length tickets < weight then trace ("lacking " ++ show (weight - length tickets) ++ " tickets in assignTickets") ([], tickets) else (drop weight tickets, take weight tickets)) tickets tree
-  in if null x then ticketNodes else error "Too many tickets in assignTickets"
+  let
+    (x, ticketNodes) =
+      mapAccumR
+        (\tickets weight ->
+          if length tickets < weight
+            then trace ("lacking " ++ show (weight - length tickets) ++ " tickets in assignTickets") ([], tickets)
+            else (drop weight tickets, take weight tickets))
+        tickets tree
+  in if null x then ticketNodes else trace "Too many tickets in assignTickets" ticketNodes
 
 createAllChildren :: Tree Individual -> Tree [(Int, Maybe FilePath)] -> IO (Tree Individual)
 --general idea: To zipper, iterate. Recurse on leftmost child, add own children if applicable.
