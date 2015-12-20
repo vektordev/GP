@@ -241,14 +241,13 @@ getFeatures zipperLoc = case label zipperLoc of
   JunkI id (Compilation, fit) -> Just $ computeFeatures Junk
   _ -> Nothing
   where
-    isLocalMax loc = (compilationRate (computeFeatures Active) >= 1%6) || (maybe False isLocalMax $ parent loc)
     computeFeatures :: State -> FeatureVec
     computeFeatures state =
       (FeatureVec
         (GRPPool.getID zipperLoc)
         (maybe (-1) GRPPool.getID (parent zipperLoc))
         (state)
-        (isLocalMax zipperLoc)
+        (getIsLocalMax zipperLoc)
         --(if (length offspringC + length offspringNC) == 0 then False else ((toInteger $ length offspringC) % (toInteger $ (length offspringC + length offspringNC))) > 1 % 8)
         (getGeneration zipperLoc)
         (if state == Junk then 0 else snd $ getFitness $ label zipperLoc)
@@ -261,6 +260,8 @@ getFeatures zipperLoc = case label zipperLoc of
       partition
         (\i -> (Compilation, -1.0 * (2^127)) <= getFitness i)
         $ map rootLabel $ subForest $ tree zipperLoc
+
+getIsLocalMax loc = (maybe 0 compilationRate (getFeatures loc) >= 1%6) || (maybe False getIsLocalMax $ parent loc)
 
 getGeneration :: TreePos Full Individual -> Int
 getGeneration loc = case parent loc of
