@@ -384,7 +384,7 @@ createChild loc id srcCode = do
 filterPool :: Int -> Tree (Individual, Float) -> (Tree Individual, [String], [String], [String])
 filterPool min genomesAndFitness = --(fmap fst genomesAndFitness, [])
   --TODO: Does this filter need work?
-  if length (filter (\i -> case i of JunkI _ _ -> False; _ -> True) $ flatten pop) > min
+  if length (filter (\i -> case i of JunkI _ _ -> False; _ -> True) $ flatten pop) < min
   then (fmap fst reducedPop, genomeRemovals, [], [])
   else (fmap (\(a,_,_)-> a) result, genomeRemovals, recompilations, fileremovals)
   where
