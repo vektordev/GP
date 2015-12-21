@@ -37,6 +37,7 @@ import Debug.Trace
 
 import Control.Monad
 import Control.Concurrent.Async
+import Control.Concurrent.MSem
 
 --currently supports only one single root node. This can be changed later on.
 --no State currently within Individual.
@@ -98,6 +99,8 @@ data FeatureVec = FeatureVec {
 
 data State = Active | Inactive | Junk deriving (Eq, Show, Read, Ord)
 data LocalMaxState = LocalMax | Inherited | Good deriving (Eq, Show, Read, Ord)
+
+maxNumberOfThreads = 8
 
 --TODO: FeatureVec now has Active/Inactive/Junk.
 --  Feature extraction should be agnostic of Individual state now,
@@ -198,7 +201,8 @@ zipTreeWith func (Node elA subforestA) (Node elB subforestB) = Node (func elA el
 
 recompile :: [String] -> IO()
 recompile paths = do
-  _ <- mapConcurrently (\path -> do (code, out, err) <- readProcessWithExitCode "ghc" [path] []; return ()) paths
+  semaphor <- new maxNumberOfThreads
+  _ <- mapConcurrently (\path -> with semaphor $ do (code, out, err) <- readProcessWithExitCode "ghc" [path] []; return ()) paths
   return ()
 
 --TODO:
@@ -438,7 +442,8 @@ filterPool min genomesAndFitness =
 --TODO: parallel *should* really be defined in terms of Traversable, rather than []
 evaluateFitness :: Pool -> IO Pool
 evaluateFitness pool = do
-  genomes' <- mapConcurrently evalIndividual (genomes pool)--this should be parallel
+  semaphor <- new maxNumberOfThreads
+  genomes' <- mapConcurrently (with semaphor . evalIndividual) (genomes pool)--this should be parallel
   return (pool{genomes = genomes'})
 
 --a function :: (TreePos Individual Full -> Individual) ->
