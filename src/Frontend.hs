@@ -10,6 +10,7 @@ import GRPIndividual
 import GRPFitness
 import GRPMath
 
+import Data.List
 import Data.Maybe
 
 import Data.Tree
@@ -26,8 +27,8 @@ makePicture p = Pictures [
     Translate (-150) (-50) $ summaryPrint p,
     Translate (-100) 0 $ plotFeatures "0 - fitness - 1" "0 - compilation rate - 1" fitness (fromRational . compilationRate) features, --(iterateTZipper getFeatures $ fromTree $ genomes p) (getWeights $ genomes p)
     Translate (-210) 0 $ plotFeatures "0 - children - 100" "0 - compilationRate - 1" (\fv -> ((1/100) * (fromIntegral $ GRPPool.children fv))) (fromRational . compilationRate) features,
-    Translate 10 0 $ plotFeatures "0 - children - 100" "-1 - crategain - 1" (\fv -> ((1/100) * (fromIntegral $ GRPPool.children fv))) (\fv -> (0.5) + 0.5 * fromRational (compilationRateGain fv)) features,
-    Translate 120 0 $ plotFeatures "0 - compilationRate - 1" "-1 - crategain - 1" (fromRational . compilationRate) (\fv -> (0.5) + 0.5 * fromRational (compilationRateGain fv)) features,
+    Translate 10 0 $ plotFeatures "0 - children - 100" "-1 - cRateGain - 1" (\fv -> ((1/100) * (fromIntegral $ GRPPool.children fv))) (\fv -> (0.5) + 0.5 * fromRational (compilationRateGain fv)) features,
+    Translate 120 0 $ plotFeatures "0 - compilationRate - 1" "-1 - cRateGain - 1" (fromRational . compilationRate) (\fv -> (0.5) + 0.5 * fromRational (compilationRateGain fv)) features,
     Translate 230 0 $ plotFeatures "0 - id - 140000" "0 - compilationRate - 1" (\fv -> (fromIntegral $ GRPPool.id fv) / 140000) (fromRational . compilationRate) features,
     Translate 340 0 $ plotFeatures "0 - id - 140000" "0 - fitness - 1" (\fv -> (fromIntegral $ GRPPool.id fv) / 140000) (fitness) features,
     Translate (-210) 110 $ plotHistogram "compRate" "0 - number " (map (fromRational . compilationRate) $ catMaybes features) 0.001,
@@ -51,7 +52,7 @@ plotFeatures lb1 lb2 ft1 ft2 fs = Pictures (map plotFeaturesSingle fs ++ axes ++
   where
     plotFeaturesSingle (Just fv) = Color (if isLocalMax fv == LocalMax then red else if isLocalMax fv == Inherited then blue else  black) $ Translate (100 * (min 1 $ max 0 $ ft1 fv)) (100 * (min 1 $ max 0 $ ft2 fv)) $Circle  (0.0 + activeRegression fv)
     plotFeaturesSingle _ = Blank
-    axes = [Line [(0,0),(0,100), (100,100),(100,0),(0,0)]]-- , Line [(900,0),(900,100)]]
+    axes = [Line [(0,0),(0,100), (100,100),(100,0),(0,0)]] ++ if "cRateGain" `isInfixOf` lb2 then [Color (makeColor 0.5 0.5 0.5 0.5) $ Line [(0,50),(100,50)]] else []
     labels = map (Scale 0.05 0.05) [Translate 0 (-110) $ Text lb1 , Rotate (-90) $ Translate 0 10 $ Text lb2]
 
 plotHistogram lb1 lb2 dat step = Pictures (labels ++ frames ++ blocks)
