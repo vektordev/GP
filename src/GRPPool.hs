@@ -36,7 +36,7 @@ import Data.Ratio
 import Debug.Trace
 
 import Control.Monad
-import Control.Concurrent.ParallelIO.Global
+import Control.Concurrent.Async
 
 --currently supports only one single root node. This can be changed later on.
 --no State currently within Individual.
@@ -198,7 +198,7 @@ zipTreeWith func (Node elA subforestA) (Node elB subforestB) = Node (func elA el
 
 recompile :: [String] -> IO()
 recompile paths = do
-  _ <- parallel $ map (\path -> do (code, out, err) <- readProcessWithExitCode "ghc" [path] []; return ()) paths
+  _ <- mapConcurrently (\path -> do (code, out, err) <- readProcessWithExitCode "ghc" [path] []; return ()) paths
   return ()
 
 --TODO:
@@ -407,7 +407,7 @@ createChild loc id srcCode = do
 --generates, from a lower bound on ActiveIs in the Pool and a Pool's genomes:
 --  The updated Tree, with only min ActiveIs.
 filterPool :: Int -> Tree (Individual, Float) -> (Tree Individual, [String], [String], [String])
-filterPool min genomesAndFitness = --(fmap fst genomesAndFitness, [])
+filterPool min genomesAndFitness =
   --TODO: Does this filter need work?
   if length (filter (\i -> case i of JunkI _ _ -> False; _ -> True) $ flatten pop) < min
   then (fmap fst reducedPop, genomeRemovals, [], [])
@@ -433,8 +433,7 @@ filterPool min genomesAndFitness = --(fmap fst genomesAndFitness, [])
 --TODO: parallel *should* really be defined in terms of Traversable, rather than []
 evaluateFitness :: Pool -> IO Pool
 evaluateFitness pool = do
-  let evalTree (Node a as) = do ind <-evalIndividual a; inds <- parallel $ map evalTree as; return (Node ind inds)
-  genomes' <- evalTree (genomes pool)--this should be parallel
+  genomes' <- mapConcurrently evalIndividual (genomes pool)--this should be parallel
   return (pool{genomes = genomes'})
 
 --a function :: (TreePos Individual Full -> Individual) ->
