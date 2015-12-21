@@ -93,6 +93,7 @@ normalizeFitness input rawFitValue =
 --This needs to aggregate the errors and process them.
 compileErrorFitness :: String -> String -> (Fitness, [(Int, String)])
 compileErrorFitness out err
+  | "Multiple declarations of" `isInfixOf` err = ((ScopeErr, -(fromIntegral $ length err)), [])
   | "Conflicting definitions for" `isInfixOf` err = ((ScopeErr, -(fromIntegral $ length err)), [])
   | "Illegal tuple section" `isInfixOf` err = ((MiscErr, -(fromIntegral $ length err)), [])
   | "No instance for" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)), [])
@@ -101,11 +102,14 @@ compileErrorFitness out err
   | "Ambiguous occurrence" `isInfixOf` err = ((AmbiguousSymbolErr, -(fromIntegral $ length err)),[])
   | "Couldn't match" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)),[])
   | "arguments, but has been given" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)),[])
+  | "argument, but has been given" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)),[])
   | "is applied to too many type arguments" `isInfixOf` err = ((MiscErr, -(fromIntegral $ length err)),[])
   | "cannot construct the infinite type:" `isInfixOf` err = ((MiscErr, -(fromIntegral $ length err)),[])
   | "parse error" `isInfixOf` err = ((ParseErr, -(fromIntegral $ length err)),[])
   | "Parse error" `isInfixOf` err = ((ParseErr, -(fromIntegral $ length err)),[])
+  | "Invalid type signature:" `isInfixOf` err = ((ParseErr, -(fromIntegral $ length err)),[])
   | "Not in scope" `isInfixOf` err = ((ScopeErr, -(fromIntegral $ length err)),[])
+  | "Non type-variable argument" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)),[])
   | "have different numbers of arguments" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)),[])
   | "Non type-variable argument in the constraint:" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)),[])
   | otherwise = trace ("GRPFitness: Unknown compiler error: " ++ err) ((UnknownCompilerError, -(fromIntegral $ length err)),[])
