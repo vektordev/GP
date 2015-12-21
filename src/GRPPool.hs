@@ -39,6 +39,8 @@ import Control.Monad
 import Control.Concurrent.Async
 import Control.Concurrent.MSem
 
+import Criterion.Measurement
+
 --currently supports only one single root node. This can be changed later on.
 --no State currently within Individual.
 --
@@ -183,17 +185,32 @@ poolSummary p = do
 
 --TODO: timestamp each iteration start.
 iteratePool :: Int -> [String] -> Pool -> IO Pool
-iteratePool 0 options p = return p
+iteratePool 0 options p = do
+  putStrLn "iterations done."
+  return p
 iteratePool it options p = do
+  initializeTime
   putStrLn ("Starting iteration " ++ show (iterations p))
   when (mod it 10 == 1) $ writeFile (getUniqueName p ++ "backup") (show p)
+  t0 <- getTime
   rp <- refillPool p
+  t1 <- getTime
   ep <- evaluateFitness rp
+  t2 <- getTime
   let (newPop, rmgenomes, recompilations, rmfiles) = filterPool (filteredSize ep) $ zipTreeWith (\a b -> (a,b)) (genomes ep) (getFilterWeights $genomes ep)
+  t3 <- getTime
   putStrLn ("recompiling files: " ++ show recompilations)
   recompile recompilations
+  t4 <- getTime
   cleanup rmgenomes
   sequence $ fmap System.Directory.removeFile rmfiles
+  t5 <- getTime
+  putStrLn (
+    "Iteration ending. Stats: tRefill: " ++ show (t1-t0) ++
+    ", tEvalFit: " ++ show (t2-t1) ++
+    ", tFilter: " ++ show (t3-t2) ++
+    ", tRecompile: " ++ show (t4-t3) ++
+    ", tCleanup" ++ show (t5-t4) ++ ".")
   iteratePool (it-1) options ep{iterations = iterations ep +1, genomes = newPop}
 
 zipTreeWith :: (a -> b -> c) -> Tree a -> Tree b -> Tree c
