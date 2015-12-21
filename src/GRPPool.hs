@@ -36,7 +36,7 @@ import Data.Ratio
 import Debug.Trace
 
 import Control.Monad
-import Control.Concurrent.Async.Pool hiding (Pool)
+import Control.Concurrent.Async
 
 --currently supports only one single root node. This can be changed later on.
 --no State currently within Individual.
@@ -196,12 +196,10 @@ iteratePool it options p = do
 zipTreeWith :: (a -> b -> c) -> Tree a -> Tree b -> Tree c
 zipTreeWith func (Node elA subforestA) (Node elB subforestB) = Node (func elA elB) $ zipWith (zipTreeWith func) subforestA subforestB
 
-numberOfThreads = 8
-
 recompile :: [String] -> IO()
-recompile paths =
-  withTaskGroup numberOfThreads action
-  where action tg = do _ <- mapConcurrently tg (\path -> do (code, out, err) <- readProcessWithExitCode "ghc" [path] []; return ()) paths; return ()
+recompile paths = do
+  _ <- mapConcurrently (\path -> do (code, out, err) <- readProcessWithExitCode "ghc" [path] []; return ()) paths
+  return ()
 
 --TODO:
 --Changes some labels around: keeps min Individuals active
@@ -439,9 +437,9 @@ filterPool min genomesAndFitness =
 --also, Fitness is likely to not cut it anymore later on as a type.
 --TODO: parallel *should* really be defined in terms of Traversable, rather than []
 evaluateFitness :: Pool -> IO Pool
-evaluateFitness pool = withTaskGroup numberOfThreads action
-  where
-    action tg = do genomes' <- mapConcurrently tg evalIndividual (genomes pool); return (pool{genomes = genomes'})
+evaluateFitness pool = do
+  genomes' <- mapConcurrently evalIndividual (genomes pool)--this should be parallel
+  return (pool{genomes = genomes'})
 
 --a function :: (TreePos Individual Full -> Individual) ->
 --  (TreePos Individual Full) -> (TreePos Individual Full)
