@@ -8,6 +8,7 @@ import System.Environment (getArgs)
 import GRPPool
 import GRPIndividual
 import GRPFitness
+import GRPMath
 
 import Data.Maybe
 
@@ -22,15 +23,24 @@ main = do
 
 makePicture :: Pool -> Picture
 makePicture p = Pictures [
-    summaryPrint p,
-    Translate (-1000) 0 $ Scale 10 10 $ plotFeatures "0 - fitness - 1" "0 - compilation rate - 1" fitness (fromRational . compilationRate) features, --(iterateTZipper getFeatures $ fromTree $ genomes p) (getWeights $ genomes p)
-    Translate (-2100) 0 $ Scale 10 10 $ plotFeatures "0 - children - 100" "0 - compilationRate - 1" (\fv -> ((1/100) * (fromIntegral $ GRPPool.children fv))) (fromRational . compilationRate) features
+    Translate (-150) (-50) $ summaryPrint p,
+    Translate (-100) 0 $ plotFeatures "0 - fitness - 1" "0 - compilation rate - 1" fitness (fromRational . compilationRate) features, --(iterateTZipper getFeatures $ fromTree $ genomes p) (getWeights $ genomes p)
+    Translate (-210) 0 $ plotFeatures "0 - children - 100" "0 - compilationRate - 1" (\fv -> ((1/100) * (fromIntegral $ GRPPool.children fv))) (fromRational . compilationRate) features,
+    Translate 10 0 $ plotFeatures "0 - children - 100" "-1 - crategain - 1" (\fv -> ((1/100) * (fromIntegral $ GRPPool.children fv))) (\fv -> (0.5) + 0.5 * fromRational (compilationRateGain fv)) features,
+    Translate 120 0 $ plotFeatures "0 - compilationRate - 1" "-1 - crategain - 1" (fromRational . compilationRate) (\fv -> (0.5) + 0.5 * fromRational (compilationRateGain fv)) features,
+    Translate 230 0 $ plotFeatures "0 - id - 140000" "0 - compilationRate - 1" (\fv -> (fromIntegral $ GRPPool.id fv) / 140000) (fromRational . compilationRate) features,
+    Translate 340 0 $ plotFeatures "0 - id - 140000" "0 - fitness - 1" (\fv -> (fromIntegral $ GRPPool.id fv) / 140000) (fitness) features,
+    Translate (-210) 110 $ plotHistogram "compRate" "0 - number " (map (fromRational . compilationRate) $ catMaybes features) 0.001,
+    Translate (-100) 110 $ plotHistogram "fitness" "0 - number " (map fitness $ catMaybes features) 0.01,
+    Translate 10 110 $ plotHistogram "children" "0 - number " (map (fromIntegral . GRPPool.children) $ catMaybes features) 1,
+    Translate 120 110 $ plotHistogram "fitgain" "0 - number " (map fitnessGainSinceParent $ catMaybes features) 0.01
     ]
     where
+      features :: [Maybe FeatureVec]
       features = flatten (extractFromTreeContext getFeatures $ genomes p)
 
 summaryPrint :: Pool -> Picture
-summaryPrint p = Pictures [
+summaryPrint p = Scale 0.1 0.1 $ Pictures [
     Translate 0 300 $ Text ("IDs handed out = " ++ show (nextID p)),
     Translate 0 150 $ Text ("Individuals found: " ++ show (length $ flatten $ genomes p)),
     Text ("Compiling genomes: "++ show (length $ filter (\ind -> getFitness ind >= (UnknownCompilerError, 10^10)) $ flatten $ genomes p))
@@ -39,11 +49,22 @@ summaryPrint p = Pictures [
 plotFeatures :: String -> String -> (FeatureVec-> Float) -> (FeatureVec-> Float) ->  [Maybe FeatureVec] -> Picture
 plotFeatures lb1 lb2 ft1 ft2 fs = Pictures (map plotFeaturesSingle fs ++ axes ++ labels)
   where
-    plotFeaturesSingle (Just fv) = Color (if isLocalMax fv then red else black) $ Translate (100 * (min 1 $ max 0 $ ft1 fv)) (100 * (min 1 $ max 0 $ ft2 fv)) $Circle  (0.0 + activeRegression fv)
+    plotFeaturesSingle (Just fv) = Color (if isLocalMax fv == LocalMax then red else if isLocalMax fv == Inherited then blue else  black) $ Translate (100 * (min 1 $ max 0 $ ft1 fv)) (100 * (min 1 $ max 0 $ ft2 fv)) $Circle  (0.0 + activeRegression fv)
     plotFeaturesSingle _ = Blank
     axes = [Line [(0,0),(0,100), (100,100),(100,0),(0,0)]]-- , Line [(900,0),(900,100)]]
     labels = map (Scale 0.05 0.05) [Translate 0 (-110) $ Text lb1 , Rotate (-90) $ Translate 0 10 $ Text lb2]
 
+plotHistogram lb1 lb2 dat step = Pictures (labels ++ frames ++ blocks)
+  where
+    raw = rawHistogram dat
+    hist = discretizeHistogram step raw
+    maxStep = snd $ snd $ Prelude.last hist
+    minStep = fst $ snd $ head hist
+    maxCount = fromIntegral $ maximum $ map fst hist
+    getNormalized pos = (pos - minStep) / (maxStep - minStep)
+    blocks = map (\(n, (from, to)) -> Scale 100 100 $ Polygon [(getNormalized from, 0),(getNormalized to, 0),(getNormalized to, ((fromIntegral n) / maxCount)),(getNormalized from, ((fromIntegral n) / maxCount)),(getNormalized from, 0)]) hist
+    frames = [Line [(0,0), (0,100),(100,100),(100,0), (0,0)]]
+    labels = map (Scale 0.05 0.05) [Translate 0 (-110) $ Text (show minStep ++ lb1 ++ show maxStep) , Rotate (-90) $ Translate 0 10 $ Text (lb2 ++ show maxCount)]
   -- , isLocalMax :: Bool
   -- , generation :: Int
   -- , fitness :: Float

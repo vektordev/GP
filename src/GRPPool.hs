@@ -1,6 +1,7 @@
 module GRPPool
 ( Pool (..)
 , FeatureVec (..)
+, LocalMaxState (..)
 , loadFromFile
 , initialPool
 , runPool
@@ -85,16 +86,18 @@ data FeatureVec = FeatureVec {
   id :: Int
 , parentid :: Int
 , state :: State
-, isLocalMax :: Bool
+, isLocalMax :: LocalMaxState
 , generation :: Int
 , fitness :: Float
 , fitnessGainSinceParent :: Float
 , compilationRate :: Ratio Integer
+, compilationRateGain :: Ratio Integer
 , children :: Int
 , avgChildFit :: Float
 } deriving (Show, Read)
 
 data State = Active | Inactive | Junk deriving (Eq, Show, Read)
+data LocalMaxState = LocalMax | Inherited | Good deriving (Eq, Show, Read)
 
 --TODO: FeatureVec now has Active/Inactive/Junk.
 --  Feature extraction should be agnostic of Individual state now,
@@ -254,6 +257,7 @@ getFeatures zipperLoc = case label zipperLoc of
         (if state == Junk then 0 else snd $ getFitness $ label zipperLoc)
         (if state == Junk then 0 else maybe 0 (\tp -> (snd $ getFitness $ label zipperLoc) - (snd $ getFitness $ label tp)) (parent zipperLoc))
         (if (length offspringC + length offspringNC) == 0 then 0%1 else ((toInteger $ length offspringC) % (toInteger $ (length offspringC + length offspringNC))))
+        (getCRateGain zipperLoc)
         (length offspringC + length offspringNC)
         (if null offspringC then 0 else mean $ map (snd . getFitness) offspringC)
       )
@@ -262,7 +266,11 @@ getFeatures zipperLoc = case label zipperLoc of
         (\i -> (Compilation, -1.0 * (2^127)) <= getFitness i)
         $ map rootLabel $ subForest $ tree zipperLoc
 
-getIsLocalMax loc = (maybe 0 compilationRate (getFeatures loc) >= 1%6) || (maybe False getIsLocalMax $ parent loc)
+getIsLocalMax loc = if maybe 0 compilationRate (getFeatures loc) >= 1%6 then LocalMax else if maybe False (\p -> Good /= getIsLocalMax p) $ parent loc then Inherited else Good
+
+getCRateGain :: TreePos Full Individual -> Ratio Integer
+--getCRateGain loc = maybe (0%1) (\ploc -> (maybe (0%1) (compilationRate . getFeatures) loc) - maybe (0%1) (compilationRate . getFeatures) ploc) (parent loc)
+getCRateGain loc = maybe (0%1) (\ploc -> (maybe (0%1) compilationRate $ getFeatures loc) - (maybe (0%1) compilationRate $ getFeatures ploc)) (parent loc)
 
 getGeneration :: TreePos Full Individual -> Int
 getGeneration loc = case parent loc of
@@ -290,13 +298,13 @@ extractFromTreeContext f as = extractChildren f $ fromTree as
 getFilterWeights :: Tree Individual -> Tree Float
 getFilterWeights individuals = fmap (maybe 0 adaptedRegression) $ extractFromTreeContext getFeatures individuals
   where
-    adaptedRegression fv@(FeatureVec _ _ state localMax _ _ _ _ _ _) = if state == Junk || localMax then 0 else  activeRegression fv
+    adaptedRegression fv@(FeatureVec _ _ state localMax _ _ _ _ _ _ _) = if state == Junk || localMax /= Good then 0 else  activeRegression fv
 
 --from a Tree of Individuals, compute a tree of weights that can be used to choose parents of this generation.
 getRefillWeights :: Tree Individual -> Tree Float
 getRefillWeights individuals = fmap (maybe 0 adaptedRegression) $ extractFromTreeContext getFeatures individuals
   where
-    adaptedRegression fv@(FeatureVec _ _ state localMax _ _ _ _ _ _) = if state /= Active || localMax then 0 else  activeRegression fv
+    adaptedRegression fv@(FeatureVec _ _ state localMax _ _ _ _ _ _ _) = if state /= Active || localMax /= Good then 0 else  activeRegression fv
 
 --from a Tree of Individuals, compute a Tree of regressed feature vectors. Keep in mind that this is not pre-processed yet, and should not be used as actual weight.
 getRegressedFeatures :: Tree Individual -> Tree Float
@@ -305,12 +313,12 @@ getRegressedFeatures individuals = fmap (maybe 0 activeRegression) $ extractFrom
 activeRegression = regressRateOnly
 
 regress :: FeatureVec -> Float
-regress (FeatureVec _ _ state localMax generation fit fitgain compilationrate chdren avgchildfit) =
+regress (FeatureVec _ _ state localMax generation fit fitgain compilationrate cRateGain chdren avgchildfit) =
   (abs fit + 10 * fitgain + abs (fromRational compilationrate)) * fromIntegral generation
 
 --add 1 to numerator, so we remove some sampling bias. Respects fitness a tiny bit. Eliminates extremely high compilation rates, which indicate local max.
 regressRateOnly :: FeatureVec -> Float
-regressRateOnly (FeatureVec id _ state localMax generation fit fitgain compilationrate chdren avgchildfit) =
+regressRateOnly (FeatureVec id _ state localMax generation fit fitgain compilationrate cRateGain chdren avgchildfit) =
   fromRational (((compilationrate * (fromIntegral chdren%1)) + 1) / ((fromIntegral chdren%1)+1)) + 0.02 * fit
 
 refillPool :: Pool -> IO Pool
@@ -381,7 +389,6 @@ createChild loc id srcCode = do
   let
     mkChild ind@(ActiveI parentID fit path) id srcCode = do
       writeFile (path ++ ".hs.stat") $show ind
-      --TODO: err and out are completely disregarded.
       (code, out, err) <- readProcessWithExitCode "timeout"
         ["1s", path ++ "hl", "-e", srcCode ++ ".hs", "GRPGenome" ++ show id ++ ".hs"] ""
       System.Directory.removeFile (path ++ ".hs.stat") --state would be lost here
@@ -390,8 +397,10 @@ createChild loc id srcCode = do
           generate ("GRPGenome" ++ show id ++ ".hs")
           return [Node (ActiveI id (Unchecked, 0.0) ("./GRPGenome" ++ show id)) []]
         else if code == ExitFailure 124
-          then trace "Timeout on genome" $ return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
-          else trace ("runtime error was: " ++ err ++ "\nOutput was" ++ out) return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
+          then return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
+          else if "Non-exhaustive patterns in function" `isInfixOf` err || "head: empty list" `isInfixOf` err
+            then return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
+            else trace ("runtime error was: " ++ err ++ "\nOutput was" ++ out) return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
   newElem <- mkChild (rootLabel $ tree loc) id srcCode -- rootlabel . tree == label ?
   return (modifyTree (\(Node a subnodes) -> Node a (newElem ++ subnodes)) loc)
 

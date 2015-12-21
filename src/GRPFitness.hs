@@ -71,7 +71,7 @@ computeFitness source path = do
       --TODO: Compute base fitness here: Code length, Hlint, runtime of mutate, performance of mutate (call and use shallow eval)
       --This function will not implement performance in a specific problem domain.
     else do
-      fitOut ("no compilation " ++ (show $ length err))
+      fitOut ("no compilation " ++ show (length err))
       fitOut err
       return $ compileErrorFitness out err -- fitness and feedback on failed compilation
 
@@ -93,6 +93,7 @@ normalizeFitness input rawFitValue =
 --This needs to aggregate the errors and process them.
 compileErrorFitness :: String -> String -> (Fitness, [(Int, String)])
 compileErrorFitness out err
+  | "Conflicting definitions for" `isInfixOf` err = ((ScopeErr, -(fromIntegral $ length err)), [])
   | "Illegal tuple section" `isInfixOf` err = ((MiscErr, -(fromIntegral $ length err)), [])
   | "No instance for" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)), [])
   | "lacks an accompanying binding" `isInfixOf` err = ((NoBindingError, -(fromIntegral $ length err)),[])
