@@ -24,7 +24,7 @@ main = do
 
 makePicture :: Pool -> Picture
 makePicture p = Pictures [
-    Translate (-150) (-50) $ summaryPrint p,
+    Translate (-150) (-110) $ summaryPrint p (catMaybes features),
     Translate (-100) 0 $ plotFeatures "0 - fitness - 1" "0 - compilation rate - 1" fitness (fromRational . compilationRate) features, --(iterateTZipper getFeatures $ fromTree $ genomes p) (getWeights $ genomes p)
     Translate (-210) 0 $ plotFeatures "0 - children - 100" "0 - compilationRate - 1" (\fv -> ((1/100) * (fromIntegral $ GRPPool.children fv))) (fromRational . compilationRate) features,
     Translate 10 0 $ plotFeatures "0 - children - 100" "-1 - cRateGain - 1" (\fv -> ((1/100) * (fromIntegral $ GRPPool.children fv))) (\fv -> (0.5) + 0.5 * fromRational (compilationRateGain fv)) features,
@@ -40,8 +40,10 @@ makePicture p = Pictures [
       features :: [Maybe FeatureVec]
       features = flatten (extractFromTreeContext getFeatures $ genomes p)
 
-summaryPrint :: Pool -> Picture
-summaryPrint p = Scale 0.1 0.1 $ Pictures [
+summaryPrint :: Pool -> [FeatureVec] -> Picture
+summaryPrint p fvs = Scale 0.1 0.1 $ Pictures [
+    Translate 0 600 $ Text (show $ rawHistogram $ map isLocalMax fvs),
+    Translate 0 450 $ Text (show $ rawHistogram $ map state fvs),
     Translate 0 300 $ Text ("IDs handed out = " ++ show (nextID p)),
     Translate 0 150 $ Text ("Individuals found: " ++ show (length $ flatten $ genomes p)),
     Text ("Compiling genomes: "++ show (length $ filter (\ind -> getFitness ind >= (UnknownCompilerError, 10^10)) $ flatten $ genomes p))

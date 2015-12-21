@@ -96,8 +96,8 @@ data FeatureVec = FeatureVec {
 , avgChildFit :: Float
 } deriving (Show, Read)
 
-data State = Active | Inactive | Junk deriving (Eq, Show, Read)
-data LocalMaxState = LocalMax | Inherited | Good deriving (Eq, Show, Read)
+data State = Active | Inactive | Junk deriving (Eq, Show, Read, Ord)
+data LocalMaxState = LocalMax | Inherited | Good deriving (Eq, Show, Read, Ord)
 
 --TODO: FeatureVec now has Active/Inactive/Junk.
 --  Feature extraction should be agnostic of Individual state now,
@@ -266,7 +266,12 @@ getFeatures zipperLoc = case label zipperLoc of
         (\i -> (Compilation, -1.0 * (2^127)) <= getFitness i)
         $ map rootLabel $ subForest $ tree zipperLoc
 
-getIsLocalMax loc = if maybe 0 compilationRate (getFeatures loc) >= 1%6 then LocalMax else if maybe False (\p -> Good /= getIsLocalMax p) $ parent loc then Inherited else Good
+getIsLocalMax loc = if maybe False localMaxRules (getFeatures loc) then LocalMax else if maybe False (\p -> Good /= getIsLocalMax p) $ parent loc then Inherited else Good
+
+localMaxRules fv@(FeatureVec _ _ _ _ _ _ _ crate crategain chdr _) = (2 * fromRational crategain) > (c * (b ** (fromIntegral (- chdr)))) && crategain > 0.05
+  where
+    c = 1.63--c = 0.269
+    b = 1.05--b = 1.02
 
 getCRateGain :: TreePos Full Individual -> Ratio Integer
 --getCRateGain loc = maybe (0%1) (\ploc -> (maybe (0%1) (compilationRate . getFeatures) loc) - maybe (0%1) (compilationRate . getFeatures) ploc) (parent loc)
