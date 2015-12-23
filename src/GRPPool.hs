@@ -39,6 +39,7 @@ import Debug.Trace
 import Control.Monad
 import Control.Concurrent.Async
 import Control.Concurrent.MSem
+--as described here: http://stackoverflow.com/a/18898822
 
 import Criterion.Measurement
 
