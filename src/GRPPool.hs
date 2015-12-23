@@ -2,6 +2,7 @@ module GRPPool
 ( Pool (..)
 , FeatureVec (..)
 , LocalMaxState (..)
+, State (..)
 , loadFromFile
 , initialPool
 , runPool
@@ -289,7 +290,7 @@ getFeatures zipperLoc = case label zipperLoc of
 
 getIsLocalMax loc = if maybe False localMaxRules (getFeatures loc) then LocalMax else if maybe False (\p -> Good /= getIsLocalMax p) $ parent loc then Inherited else Good
 
-localMaxRules fv@(FeatureVec _ _ _ _ _ _ _ crate crategain chdr _) = (2 * fromRational crategain) > (c * (b ** (fromIntegral (- chdr)))) && crategain > 0.05
+localMaxRules fv@(FeatureVec _ _ _ _ _ _ _ crate crategain chdr _) = (2 * fromRational crategain) > (c * (b ** (fromIntegral (- chdr)))) && crategain > 0.15
   where
     c = 1.63--c = 0.269
     b = 1.05--b = 1.02
