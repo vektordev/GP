@@ -16,6 +16,8 @@ import Data.Maybe
 import Data.Tree
 import Data.Tree.Zipper
 
+import Debug.Trace
+
 main :: IO()
 main = do
   args <-getArgs
@@ -37,8 +39,22 @@ makePicture p = Pictures [
     Translate 120 110 $ plotHistogram "fitgain" "0 - number " (map fitnessGainSinceParent $ catMaybes features) 0.01
     ]
     where
+      featureTree = extractFromTreeContext getFeatures $ genomes p
       features :: [Maybe FeatureVec]
-      features = flatten (extractFromTreeContext getFeatures $ genomes p)
+      features = flatten featureTree
+
+findCommonAncestor :: ((Maybe FeatureVec) -> Bool) -> Tree (Maybe FeatureVec) -> Tree (Maybe FeatureVec)
+findCommonAncestor cond self@(Node fv tFvs) =
+  if cond fv
+    then self
+    else if twoHaveElements tFvs
+      then self
+      else trace ("step") $findCommonAncestor cond (head $ filter hasElement tFvs)
+  where
+    hasElement :: Tree (Maybe FeatureVec) -> Bool
+    hasElement tree = any cond tree
+    twoHaveElements :: [Tree (Maybe FeatureVec)] -> Bool
+    twoHaveElements forest = 2 <= (length $ filter hasElement forest)
 
 summaryPrint :: Pool -> [FeatureVec] -> Picture
 summaryPrint p fvs = Scale 0.1 0.1 $ Pictures [
