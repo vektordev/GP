@@ -52,4 +52,4 @@ rmlist a xs = xs
 initial = [ 10000000 , 20000000 ]
 lexemlisttransform [] rng state = []
 lexemlisttransform ( lex : lst ) rng state = let ( decision , rng2 ) = next rng :: ( Int , StdGen ) in if decision < ( head initial ) then let ( n , rng3 ) = next rng2 in ( lexems !! ( mod n $ length lexems ) ) : lex : ( lexemlisttransform lst rng3 state) else if decision < ( last initial ) then lexemlisttransform lst rng2 state else lex : ( lexemlisttransform lst rng2 state)
-act rngs state inp = ( (take (div (length inp) 2) inp, drop (div (length inp) 2) inp), state)
+act rngs state ( PPI inp ) = ( PPO ( take ( div ( length inp ) 2 ) inp, drop ( div ( length inp ) 2 ) inp ) , state)

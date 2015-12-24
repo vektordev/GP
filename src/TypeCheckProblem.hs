@@ -5,6 +5,8 @@ module TypeCheckProblem(
 , bestScore
 ) where
 
+import GRPCommon
+
 --TODO: This file will generate Haskell expressions as Strings,
 --give information about used functions, typeclasses etc and then
 --expect the candidate to tell whether the given expression typechecks.
@@ -27,9 +29,7 @@ module TypeCheckProblem(
 
 --how to phrase the problem of "does this type match this type"?
 
-type Input = [String]
-type Output = String
-
+--probably gonna have to use a library or a GHC call here.
 fitness :: Input -> Output -> IO Float
 fitness = undefined
 

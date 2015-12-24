@@ -21,8 +21,10 @@ module GRPCommon
 , pickWord
 , choose
 , State
-, Input
-, Output
+, Input (..)
+, Output (..)
+, PartitioningProblemInput
+, PartitioningProblemOutput
 , lexems
 ) where
 
@@ -40,9 +42,14 @@ module GRPCommon
 
 --these need domain specific modeling, maybe. Output and Input should be typed according to the problem domain.
 type State = [Int]
-type Output = ([Int], [Int])
-type Input = [Int]
+data Input = PPI PartitioningProblemInput deriving (Show, Read)
+data Output = NotImplemented | PPO PartitioningProblemOutput deriving (Show, Read)
 
+type PartitioningProblemInput = [Int]
+type PartitioningProblemOutput = ([Int], [Int])
+
+type TCInput = [String]
+type TCOutput = String
 
 ite a b c = if a then b else c
 
