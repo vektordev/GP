@@ -217,6 +217,7 @@ iteratePool it options p = do
 
 zipTreeWith :: (a -> b -> c) -> Tree a -> Tree b -> Tree c
 zipTreeWith func (Node elA subforestA) (Node elB subforestB) = Node (func elA elB) $ zipWith (zipTreeWith func) subforestA subforestB
+--can this not be expressed simpler? Why is there no typeclass for this?
 
 recompile :: [String] -> IO()
 recompile paths = do
@@ -228,7 +229,7 @@ recompile paths = do
 --Changes some labels around: keeps min Individuals active
 --keeps another min Individuals Inactive
 --labels the rest as JunkI
---Kepp JunkI iff any of these is true:
+--Keep JunkI iff any of these is true:
 --  It is less than X degrees of separation from the nearest InactiveI
 --    X is the number of Degrees of separation that feature extraction considers
 --  It is the only common ancestor of the entire [In]Active Population
@@ -313,11 +314,6 @@ cleanup (x:xs) = do
   System.Directory.removeFile (x ++"hl.hs")
   cleanup xs
 
---cartesianProduct :: Pool -> IO Pool
---cartesianProduct (Pool max min nxt genomes) = do
---  let srcs = catMaybes $ path $ flatten genomes
---  let tickets = [nxt .. nxt -1 + length srcs * (length filter (\g -> case g of ActiveI _ _ -> True; _ -> False;) genomes)]
-
 extractFromTreeContext :: (TreePos Full a -> b) -> Tree a -> Tree b
 extractFromTreeContext f as = extractChildren f $ fromTree as
   where extractChildren f asZip = (Node (f asZip) [extractChildren f (fromJust $ childAt x asZip) | x <- [0..(length $ subForest $ tree asZip) - 1], isJust $ childAt x asZip])
@@ -349,19 +345,37 @@ regressRateOnly :: FeatureVec -> Float
 regressRateOnly (FeatureVec id _ state localMax generation fit fitgain compilationrate cRateGain chdren avgchildfit) =
   fromRational (((compilationrate * (fromIntegral chdren%1)) + 1) / ((fromIntegral chdren%1)+1)) + 0.02 * fit
 
+cartesianProduct :: Pool -> IO Pool
+cartesianProduct (Pool name  it max gain nxt genomes) = do
+  --let size = length $ filter (\i -> case i of ActiveI _ _ _ -> True; _ -> False) $ flatten genomes
+  let tickets = [nxt .. nxt + gain - 1]
+  let wtNodes = weightedAssign gain (getRefillWeights genomes) :: Tree Int
+  --let srcs = take newGenomesCnt $ mapMaybe path $ flatten genomes--TODO: sample according to wtNodes.
+  let srcs = concat $ flatten $ fmap
+                                    (\(ind, weight) -> maybe [] (replicate weight) (path ind))
+                                    $ zipTreeWith (,) genomes wtNodes :: [String]
+  let ticketnodes = fmap (\x -> zip x (repeat Nothing)) $ assignTickets wtNodes tickets :: Tree [(Int, Maybe String)]
+  --probably best to use treeZipWith here... or so.
+  --we can use foldl to associate every node in ticketNodes with a src.
+  --srcs needs to be shuffled.
+  --v v v Or something like that. replace every occurence of Nothing with a src
+  let ticketnodes' = foldr (\srcs ticketNode -> ticketNode ) ticketnodes srcs
+  newGenomes <- createAllChildren genomes ticketnodes
+  return $ Pool name it max gain (nxt + gain) newGenomes
+--TODO: Maybe an actual full cartesion Product is easier implemented, making it reasonably computable is done afterwards
+
 refillPool :: Pool -> IO Pool
 refillPool (Pool name it max gain nxt genomes) = do
-  let size = length $ filter (\i -> case i of ActiveI _ _ _ -> True; _ -> False) $ flatten genomes
+  --let size = length $ filter (\i -> case i of ActiveI _ _ _ -> True; _ -> False) $ flatten genomes
   let newGenomesCnt = gain
   let tickets = [nxt .. nxt + newGenomesCnt - 1]
-  --We definitely need to preprocess the fitness value
-  -- - bare as they are, they're not really good for that purpose
-  --negative weights are particularly bad. Thus: Absolute value, just to be sure.
-  let wtNodes = weightedAssign newGenomesCnt (getRefillWeights genomes)
+  let wtNodes = weightedAssign newGenomesCnt (getRefillWeights genomes) :: Tree Int
   let ticketnodes = fmap (\x -> zip x (repeat Nothing) ) $ assignTickets wtNodes tickets
   newGenomes <- createAllChildren genomes ticketnodes
   return $ Pool name it max gain (nxt + newGenomesCnt) newGenomes
 
+--assigns tickets of type a to a Traversable of Ints, one ticket per value in each location.
+assignTickets :: Traversable t => t Int -> [a] -> t [a]
 assignTickets tree tickets =
   let
     (x, ticketNodes) =
@@ -458,7 +472,6 @@ filterPool min genomesAndFitness =
 --map over the tree structure, but later we'll do a traversion of the neighborhood
 --for every node considered.
 --also, Fitness is likely to not cut it anymore later on as a type.
---TODO: parallel *should* really be defined in terms of Traversable, rather than []
 evaluateFitness :: Pool -> IO Pool
 evaluateFitness pool = do
   semaphor <- new maxNumberOfThreads

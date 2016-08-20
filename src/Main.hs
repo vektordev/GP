@@ -5,21 +5,21 @@ module Main
 
 import System.IO
 import System.Environment (getArgs)
-import Control.Concurrent.ParallelIO.Global
 
 import GRPPool
+import GRPDictionaryGenerator
 
 main = do
   hSetBuffering stdout LineBuffering
   args <- getArgs
   processArgs args
-  stopGlobalPool --stops the thread pool
 
 --syntax: --start m n name --iterations i --no-output
 --syntax: --load path --iterations 0
 --syntax: --testrun
 --syntax: --truncate path newname --iterations n
 processArgs :: [String] -> IO ()
+processArgs ["--init"] = mkDictionary
 processArgs ["--testrun"] = testrun
 processArgs ("--start" : gain : min : name : "--iterations" : it : options) =
   initialPool (read gain) (read min) name  >>= runPool (read it) options

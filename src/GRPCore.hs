@@ -24,7 +24,6 @@ import Data.Tree
 import Data.Ord
 
 import Control.Applicative
-import Control.Concurrent.ParallelIO.Global
 
 import Debug.Trace
 

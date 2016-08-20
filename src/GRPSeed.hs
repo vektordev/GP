@@ -13,6 +13,7 @@ import Data.Maybe (isJust, fromJust)
 import Data.List
 import GRPCommon
 import Language.Haskell.Exts.Parser -- limit those imports.
+import Language.Haskell.Exts.Syntax
 
 reprogram :: [StdGen] -> State -> [String] -> (String, State)
 act :: [StdGen] -> State -> Input -> (Output, State)
@@ -33,11 +34,11 @@ t2 = do
   return preproc
 -}
 
---TODO: Update GRPCommon to sport a suitable dictionary to make a typechecker.
---  This means we need all the words in scope in this file.
---  Also, we need type signatures for them. Automation is needed, see TypeCheckProblem.
+--TODO: Refactor the Seed function. As of now, we apparently do not need to stick to the restricted syntax.
+--thus, line endings, type annotations etc. are possible. Use the syntax checker to preprocess everything.
+--Preferably train the type checker to work on AST-level.
 --The Danger Zone starts here. Keep the next line up to date:
-safeLines = 40
+safeLines = 41
 reprogram ( r1 : _ ) state ( source1 : _ ) = let candidates = map ( \ rng -> lexemlisttransform ( preproc source1 ) rng state ) ( infrg r1 ) in (head $ filter ( \ candidate -> ( candidate /= postproc ( preproc source1 ) ) && ( parseable candidate ) ) (map postproc $ filter (\x -> True) candidates), state )
 parseable str = let result = parseModule str in wasSuccess result
 wasSuccess ( ParseFailed _ _ ) = False

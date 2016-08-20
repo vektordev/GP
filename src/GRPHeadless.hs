@@ -51,6 +51,7 @@ fitnessEval statFile = do
   renameFile (statFile ++ "~") statFile
   --TODO2: verify correct copying
 
+-- -e
 evolve :: FilePath -> FilePath -> FilePath -> IO()
 evolve parentStatFile srcFile newFileName = do
   putStrLn "ev was called"

@@ -6,6 +6,12 @@ module TypeCheckProblem(
 ) where
 
 import GRPCommon
+import System.Random
+import Control.Monad
+import Data.List
+import GRPMath
+import Dictionary
+import GhciEval
 
 --TODO: This file will generate Haskell expressions as Strings,
 --give information about used functions, typeclasses etc and then
@@ -23,20 +29,51 @@ import GRPCommon
 --Out: map (+1)  [1..3] :: (Enum b, Num b) => [b]
 --fitness: section in front of arrow is bonus, the closer the better. Low impact on fitness
 --double-colon is required; highish impact.
---section after :: - every matching parameter adds points, every right contraint, correct result type; high total impact
+--section after :: - every matching parameter adds points, every right constraint, correct result type; high total impact
 
---how to handle mismatches?
+--TODO: Generate a set of Inputs on/pre startup, load from File; to avoid huge runtime of hint.
+--TODO: Look into starting up hint globally to prevent long startup time.
 
---how to phrase the problem of "does this type match this type"?
+testset explength datalength = do
+  exps <- forM [1..datalength] (\_ -> generateInput explength) :: IO [Input]
+  let dataset = map (\(TCI [x]) -> x) exps
+  doesTypeCheck <- fmap (map (/= "")) $ mapM eval dataset
+  return (length $ filter id doesTypeCheck, length doesTypeCheck)
 
---probably gonna have to use a library or a GHC call here.
+generateTestCases :: Int -> IO ()
+generateTestCases n = do
+  lstOfInputs <- mapM generateInput [div x 300 + 1 | x <- [1..n]]
+  lstOfOutputs <- mapM (\(TCI inp) -> eval $ head inp) lstOfInputs
+  --TODO: wrap this in a lookup container, make that available to fitness... somehow.
+  print lstOfInputs
+  print lstOfOutputs
+  results <- zipWithM fitness lstOfInputs $ map TCO lstOfOutputs
+  print results
+  return ()
+
 fitness :: Input -> Output -> IO Float
-fitness = undefined
+fitness (TCI inp) (TCO out) = do
+  actualType <- eval $ head inp
+  print actualType
+  return $ similarity actualType out
 
+--TODO: Satisfies minimally necessary conditions. Not very smooth, reacts harshly to smaller errors.
+--TODO: Needs to ignore type variable naming.
+similarity :: String -> String -> Float
+similarity a b = fromIntegral correctWords / fromIntegral numWords
+  where
+    numWords = max (length $ words a) (length $ words b)
+    correctWords = length $ filter id $ zipWith (==) (words a) (words b)
+
+--TODO: Needs to intentionally generate more complex input structures: Brackets, indentation, type annotations, etc.
 generateInput :: Int -> IO Input
-generateInput = undefined
---general pattern: find all symbols. Pick n at random.
---expansion: use hoogle to find matching symbols maybe?
+generateInput 1 = do
+  (word, _) <- getStdRandom (pickRandomly declarations)
+  return $ TCI [word]
+generateInput i = do
+  (word, _) <- getStdRandom (pickRandomly declarations)
+  (TCI [rest]) <- generateInput (i-1)
+  return $ TCI [word ++ " " ++ rest]
 
 worstScore :: Input -> Float
 worstScore x = 0.0

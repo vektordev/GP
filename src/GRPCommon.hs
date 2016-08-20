@@ -26,7 +26,11 @@ module GRPCommon
 , PartitioningProblemInput
 , PartitioningProblemOutput
 , lexems
+, pickRandomly
 ) where
+
+import System.Random
+import Dictionary
 
 {-
   This file contains some basic functions that are supposed to be used by the code generator
@@ -40,10 +44,12 @@ module GRPCommon
 
 --TODO: This whole file is deprecated and needs refactoring.
 
+--TODO: Use a hashmap / assocmap like structure for memory.
+
 --these need domain specific modeling, maybe. Output and Input should be typed according to the problem domain.
 type State = [Int]
-data Input = PPI PartitioningProblemInput deriving (Show, Read)
-data Output = NotImplemented | PPO PartitioningProblemOutput deriving (Show, Read)
+data Input = PPI PartitioningProblemInput | TCI TCInput | WarningsShutTheTrap deriving (Show, Read)
+data Output = PPO PartitioningProblemOutput | TCO TCOutput | NotImplemented deriving (Show, Read)
 
 type PartitioningProblemInput = [Int]
 type PartitioningProblemOutput = ([Int], [Int])
@@ -77,6 +83,9 @@ third4 (a,b,c,d) = c
 fourth4 (a,b,c,d) = d
 --end
 
+pickRandomly :: [a] -> StdGen -> (a, StdGen)
+pickRandomly elems rng = (elems !! (ix `mod` length elems), rng2)
+  where (ix, rng2) = next rng
 
 --TODO: Only allow printable chars here? \t, \n, ' ', symbols, digits and characters?
 mkChar = (!!) ['\0'..'\127']
