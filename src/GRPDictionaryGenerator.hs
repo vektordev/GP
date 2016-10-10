@@ -1,6 +1,6 @@
---module GRPDictionaryGenerator
---( mkDictionary
---) where
+module GRPDictionaryGenerator
+( mkDictionary
+) where
 
 import System.Process (readProcessWithExitCode)
 import System.Directory (removeFile, renameFile)

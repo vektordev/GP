@@ -1,0 +1,3 @@
+module Dictionary where
+
+declarations = []
