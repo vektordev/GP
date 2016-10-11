@@ -35,7 +35,8 @@ executable GP
                        SafeSemaphore,
                        criterion,
                        hint,
-                       bytestring
+                       bytestring,
+                       deepseq
   hs-source-dirs:      src
   default-language:    Haskell2010
 

@@ -4,6 +4,7 @@ module GhciEval (
 
 import System.Process (readProcessWithExitCode)
 import Control.Monad
+import Control.DeepSeq
 import Data.List
 import Language.Haskell.Interpreter (runInterpreter, loadModules, setTopLevelModules, setImportsQ, typeOf, Interpreter(..), liftIO)
 
@@ -24,14 +25,15 @@ eval prog = do
   return typedecl
 -}
 
+--evaluates the type of an expression.
 eval :: String -> IO String
 eval prog = do
   r <- runInterpreter $ testHint prog
   case r of
     Left err -> do
-      putStrLn ("error in eval: " ++ show err)
+      putStrLn ("error in eval when evaluating \"" ++ prog ++ "\": " ++ show err)
       return ""
-    Right str -> return str
+    Right str -> return $! force str
 
 say :: String -> Interpreter ()
 say = liftIO . putStrLn
