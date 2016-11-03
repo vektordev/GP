@@ -16,7 +16,8 @@ import Debug.Trace
 import System.Process (readProcessWithExitCode, createProcess, shell)
 import System.Random
 import GRPCommon
-import PartitioningProblem
+import PartitioningProblem as PP
+import TypeCheckProblem as TCP
 import GRPMath
 
 {-
@@ -76,19 +77,28 @@ computeFitness source path = do
       return $ compileErrorFitness out err -- fitness and feedback on failed compilation
 
 --TODO 2: query multiple times with different input data; get median/mean.
---This can be extended to evaluate fitness in different problem domains.
+--TODO: This needs to be extended to evaluate fitness in different problem domains.
 computeProblemFitness :: ([StdGen] -> State -> Input -> (Output, State)) -> State -> IO (Float, State)
 computeProblemFitness actFnc agState = do
   let queries = [2..11]
   rngs <- replicateM (length queries) newStdGen
-  inputs <- mapM generateInput [2^n | n <- queries]
-  let (newSt, outs)= foldr (\ (input, rng) (state, oldouts) -> let (actOut, actState) = actFnc [rng] state input in (actState, actOut : oldouts)) (agState, []) (zip inputs rngs) :: (State, [Output])  --actFnc [rng] agState input
-  fits <- zipWithM fitness inputs outs
-  return (mean $ zipWith normalizeFitness inputs fits, newSt) --(sum (map normalizeFitness inputs fit) / (length queries), newSt)
+  inputs <- mapM PP.generateInput [2^n | n <- queries]
+  let (interimSt, outs)= foldr (\ (input, rng) (state, oldouts) -> let (actOut, actState) = actFnc [rng] state input in (actState, actOut : oldouts)) (agState, []) (zip inputs rngs) :: (State, [Output])  --actFnc [rng] agState input
+  fits <- zipWithM PP.fitness inputs outs
+  exprTypeAssocs <- readTestCases
+  let (challenges, responses) = unzip exprTypeAssocs :: ([Input], [Output])
+  --TODO: replace RNG in next line for unique ones.
+  let (newSt, tCPouts)= foldr (\ (input, rng) (state, oldouts) -> let (actOut, actState) = actFnc [rng] state input in (actState, actOut : oldouts)) (agState, []) (zip challenges rngs) :: (State, [Output])
+  fitTCP <- zipWithM TCP.fitness challenges tCPouts
+  let scorePP = mean $ zipWith normalizeFitness inputs fits
+  let scoreTCP = mean $ zipWith normalizeFitness challenges fitTCP
+  return (scorePP + scoreTCP, newSt) --(sum (map normalizeFitness inputs fit) / (length queries), newSt)
 
 normalizeFitness :: Input -> Float -> Float
-normalizeFitness input rawFitValue =
-  (rawFitValue - worstScore input) / (bestScore input - worstScore input)
+normalizeFitness input@(PPI _) rawFitValue =
+  (rawFitValue - PP.worstScore input) / (PP.bestScore input - PP.worstScore input)
+normalizeFitness input@(TCI _) rawFitValue =
+  (rawFitValue - TCP.worstScore input) / (TCP.bestScore input - TCP.worstScore input)
 
 --This needs to aggregate the errors and process them.
 compileErrorFitness :: String -> String -> (Fitness, [(Int, String)])

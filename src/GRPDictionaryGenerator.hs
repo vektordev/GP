@@ -12,6 +12,7 @@ import Data.List.Split
 import Language.Haskell.Exts.Parser
 import Language.Haskell.Exts.Extension
 import Language.Haskell.Exts.Syntax
+import Language.Haskell.Exts.SrcLoc
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
 import System.IO (openFile, hClose, IOMode(WriteMode), Handle)
@@ -70,11 +71,11 @@ createModule decls = BS.intercalate (BS.pack ",\n  ") $ map (BS.pack . show) dec
 prefix = BS.pack "module Dictionary (\ndeclarations\n) where\n\n--Generated automatically using GRPDictionaryGenerator:mkDictionary - regenerate if out of date.\n\ndeclarations :: [(String, String)]\ndeclarations =\n  [\n  "
 postfix = BS.pack "\n  ]\n"
 
-extractDecls :: ParseResult Module -> [Decl]
-extractDecls (ParseOk (Module _ _ _ _ _ _ decls)) = decls
+extractDecls :: ParseResult (Module a) -> [Decl a]
+extractDecls (ParseOk (Module _ _ _ _ decls)) = decls
 extractDecls _ = []
 
-parseBrowseOutput :: String -> IO [ParseResult Module]
+parseBrowseOutput :: String -> IO [ParseResult (Module SrcSpanInfo)]
 parseBrowseOutput str = do
   writeFile "rawDict.hs" $ unlines (map show failedP ++ map show succP)
   putStrLn ("Failed: " ++ show (length failedP) ++ ", succeeded: " ++ show (length succP))

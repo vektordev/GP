@@ -3,6 +3,9 @@ module TypeCheckProblem(
 , generateInput
 , worstScore
 , bestScore
+, generateTestCases
+, readTestCases
+, writeTestCases
 ) where
 
 import GRPCommon
@@ -40,22 +43,41 @@ testset explength datalength = do
   doesTypeCheck <- fmap (map (/= "")) $ mapM eval dataset
   return (length $ filter id doesTypeCheck, length doesTypeCheck)
 
+writeTestCases :: [(Input, Output)] -> IO ()
+writeTestCases lst = writeFile "TypeCheckTests" $ show lst
+
+readTestCases :: IO [(Input, Output)]
+readTestCases = liftM read $ readFile "TypeCheckTests"
+
 generateTestCases :: Int -> IO ()
 generateTestCases n = do
   lstOfInputs <- mapM generateInput [div x 300 + 1 | x <- [1..n]]
   lstOfOutputs <- mapM (\(TCI inp) -> eval $ head inp) lstOfInputs
   --TODO: wrap this in a lookup container, make that available to fitness... somehow.
+  --writeFile "TypeCheckTests" $ show (zip lstOfInputs map $ TCO lstOfOutputs)
+  writeTestCases $ zip lstOfInputs (map TCO lstOfOutputs)
+  putStrLn "Hello world 1"
   print lstOfInputs
+  putStrLn "Hello world 2"
   print lstOfOutputs
-  results <- zipWithM fitness lstOfInputs $ map TCO lstOfOutputs
-  print results
+  putStrLn "Hello world 3"
+  --results <- zipWithM fitness lstOfInputs $ map TCO lstOfOutputs
+  --print results
+  putStrLn "Hello world 4"
   return ()
+
+lookUpTestCase :: String -> IO Output
+lookUpTestCase input =
+  do
+    assocs <- readTestCases
+    return $ snd $ head $ filter (\(TCI x, _) -> head x == input) $ assocs
 
 fitness :: Input -> Output -> IO Float
 fitness (TCI inp) (TCO out) = do
-  actualType <- eval $ head inp
+  (TCO actualType) <- lookUpTestCase $ head inp
   print actualType
   return $ similarity actualType out
+fitness (PPI _) (PPO _) = error "You called the wrong function, doofus."
 
 --TODO: Satisfies minimally necessary conditions. Not very smooth, reacts harshly to smaller errors.
 --TODO: Needs to ignore type variable naming.

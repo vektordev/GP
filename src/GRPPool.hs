@@ -204,11 +204,11 @@ iteratePool it options p = do
   putStrLn ("recompiling files: " ++ show recompilations)
   recompile recompilations
   t4 <- getTime
-  cleanup rmgenomes
-  sequence $ fmap System.Directory.removeFile rmfiles
+  unless ("--debug" `elem` options) $ cleanup rmgenomes --For Debug, do not clean up source code files. This allows for debugging of sneaky compiler errors.
+  sequence $ fmap System.Directory.removeFile rmfiles   --Removing the executables is OK though.
   t5 <- getTime
   putStrLn (
-    "Iteration ending. Stats: tRefill: " ++ show (t1-t0) ++
+    "Iteration ending. Profiling stats: tRefill: " ++ show (t1-t0) ++
     ", tEvalFit: " ++ show (t2-t1) ++
     ", tFilter: " ++ show (t3-t2) ++
     ", tRecompile: " ++ show (t4-t3) ++
@@ -334,7 +334,12 @@ getRefillWeights individuals = fmap (maybe 0 adaptedRegression) $ extractFromTre
 getRegressedFeatures :: Tree Individual -> Tree Float
 getRegressedFeatures individuals = fmap (maybe 0 activeRegression) $ extractFromTreeContext getFeatures individuals
 
-activeRegression = regressRateOnly
+activeRegression = regressFit
+
+--ignore compilation rate. Thus, we can try to fit to type check problem instead of overfitting ruthlessly.
+regressFit :: FeatureVec -> Float
+regressFit (FeatureVec _ _ _ localMax generation fit fitgain compilationrate cRateGain chdren avgchildfit) =
+  abs fit --TODO evaluate fitgain as possible expansion.
 
 regress :: FeatureVec -> Float
 regress (FeatureVec _ _ state localMax generation fit fitgain compilationrate cRateGain chdren avgchildfit) =

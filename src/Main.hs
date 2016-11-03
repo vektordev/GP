@@ -8,6 +8,7 @@ import System.Environment (getArgs)
 
 import GRPPool
 import GRPDictionaryGenerator
+import TypeCheckProblem
 
 main = do
   hSetBuffering stdout LineBuffering
@@ -19,7 +20,9 @@ main = do
 --syntax: --testrun
 --syntax: --truncate path newname --iterations n
 processArgs :: [String] -> IO ()
-processArgs ["--init"] = mkDictionary
+processArgs ["--init"] = do
+  mkDictionary
+  generateTestCases 400
 processArgs ["--testrun"] = testrun
 processArgs ("--start" : gain : min : name : "--iterations" : it : options) =
   initialPool (read gain) (read min) name  >>= runPool (read it) options
@@ -33,6 +36,7 @@ processArgs _ = putStrLn "invalid operands.\nOperands are:\n  --testrun\n  --sta
 testrun :: IO()
 testrun = do
   putStrLn "Starting test run."
+  generateTestCases 30
   ip <- initialPool 100 50 "defaultTest"
   runPool 3 [] ip
   putStrLn "Done!"

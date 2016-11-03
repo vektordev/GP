@@ -33,7 +33,9 @@ eval prog = do
     Left err -> do
       putStrLn ("error in eval when evaluating \"" ++ prog ++ "\": " ++ show err)
       return ""
-    Right str -> return $! force str
+    Right str -> do
+      putStrLn ("eval successful with" ++ str)
+      return $! force str
 
 say :: String -> Interpreter ()
 say = liftIO . putStrLn
