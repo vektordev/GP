@@ -119,6 +119,7 @@ compileErrorFitness out err
   | "Parse error" `isInfixOf` err = ((ParseErr, -(fromIntegral $ length err)),[])
   | "Invalid type signature:" `isInfixOf` err = ((ParseErr, -(fromIntegral $ length err)),[])
   | "Not in scope" `isInfixOf` err = ((ScopeErr, -(fromIntegral $ length err)),[])
+  | "Variable not in scope" `isInfixOf` err = ((ScopeErr, -(fromIntegral $ length err)),[])
   | "Non type-variable argument" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)),[])
   | "have different numbers of arguments" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)),[])
   | "Non type-variable argument in the constraint:" `isInfixOf` err = ((TypeErr, -(fromIntegral $ length err)),[])

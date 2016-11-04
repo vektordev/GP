@@ -142,6 +142,8 @@ getDotFile pool = unlines (["strict graph network{"] ++ edges ( genomes pool) ++
 
 runPool :: Int -> [String] -> Pool -> IO ()
 runPool it options pool = do
+  (code, out, err) <- readProcessWithExitCode "git" ["rev-parse", "HEAD"] ""
+  writeFile (name pool ++ (show $ iterations pool) ++ "-" ++ show it ++ "-revision") out
   newPool <- iteratePool it options  pool
   writeFile (getUniqueName newPool) (show newPool)
   unless ("--no-output" `elem` options) $ output newPool
