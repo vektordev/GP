@@ -33,6 +33,7 @@ discretizeHistogram
 discretizeHistogram step hist =
   let
     intervalDelim = [snd $ head hist, (snd (head hist) + step).. (snd (last hist) + step)] --(snd (last hist) + step)]
+    numericalStepSize = (snd (head hist) + step) - (snd (head hist))
     intervals = [(0, (x,x+step)) | x <- intervalDelim]
     zipping hist pt =
       case hist of
@@ -42,7 +43,9 @@ discretizeHistogram step hist =
             Left border -> (0, (border, border)):(num, (begin, border)):xs
             Right (num2, val) -> (num2 + num, (begin, end)):xs
   in
-    dropWhile (\x -> fst x == 0) $ reverse $ dropWhile (\x -> fst x == 0) $ foldl zipping [] (sortBy (comparing (either id snd)) (map Left intervalDelim ++ map Right hist))
+    if numericalStepSize == 0 || length intervalDelim > 10000000
+      then error "discretizeHistogram: too many bins"
+      else dropWhile (\x -> fst x == 0) $ reverse $ dropWhile (\x -> fst x == 0) $ foldl zipping [] (sortBy (comparing (either id snd)) (map Left intervalDelim ++ map Right hist))
 
 --do p <- loadFromFile "wedevetest-301"; sequence map print $ rawHistogram $ map fitness $ flatten $ genomes p
 --do p <- loadFromFile "wedevetest-301"; putStrLn $ show $ rawHistogram  $ map compilationRate $ catMaybes $ iterateTZipper getFeatures $ fromTree $ genomes p

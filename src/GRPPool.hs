@@ -510,7 +510,7 @@ evalIndividual (ActiveI id (Unchecked, val) path) = do
       putStrLn "exit failure in eval"
       print (code, out, err)
       --System.Directory.removeFile (path ++".hs.stat")
-      return (ActiveI id (Compilation, -1.0 * (2^120)) path)
+      return (ActiveI id (Compilation, 0.0) path)
   else return (ActiveI id fitVal path)
 --Marking individuals as inactive shouldn't be done here.
 evalIndividual indiv = return indiv
