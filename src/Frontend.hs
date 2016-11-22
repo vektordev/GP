@@ -66,10 +66,11 @@ summaryPrint p fvs = Scale 0.1 0.1 $ Pictures [
   ]
 
 plotFeatures :: String -> String -> (FeatureVec-> Float) -> (FeatureVec-> Float) ->  [Maybe FeatureVec] -> Picture
-plotFeatures lb1 lb2 ft1 ft2 fs = Pictures (map plotFeaturesSingle fs ++ axes ++ labels)
+plotFeatures lb1 lb2 ft1 ft2 fs = Pictures (points ++ axes ++ labels)
   where
     plotFeaturesSingle (Just fv) = Color (if GRPPool.id fv == 0 then green else if isLocalMax fv == LocalMax then red else if isLocalMax fv == Inherited then blue else  black) $ Translate (100 * (min 1 $ max 0 $ ft1 fv)) (100 * (min 1 $ max 0 $ ft2 fv)) $Circle  (0.0 + activeRegression fv)
     plotFeaturesSingle _ = Blank
+    points = filter (/= Blank) $ map plotFeaturesSingle fs
     axes = [Line [(0,0),(0,100), (100,100),(100,0),(0,0)]] ++ if "cRateGain" `isInfixOf` lb2 then [Color (makeColor 0.5 0.5 0.5 0.5) $ Line [(0,50),(100,50)]] else []
     labels = map (Scale 0.05 0.05) [Translate 0 (-110) $ Text lb1 , Rotate (-90) $ Translate 0 10 $ Text lb2]
 

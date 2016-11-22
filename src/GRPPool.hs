@@ -376,10 +376,20 @@ refillPool (Pool name it max gain nxt genomes) = do
   --let size = length $ filter (\i -> case i of ActiveI _ _ _ -> True; _ -> False) $ flatten genomes
   let newGenomesCnt = gain
   let tickets = [nxt .. nxt + newGenomesCnt - 1]
+  let srcAssignments = repeat Nothing :: [Maybe FilePath]
   let wtNodes = weightedAssign newGenomesCnt (getRefillWeights genomes) :: Tree Int
-  let ticketnodes = fmap (\x -> zip x (repeat Nothing) ) $ assignTickets wtNodes tickets
+  let idNodes = assignTickets wtNodes tickets :: Tree [Int]
+  let (ticketnodes, srcsLeftOver) = assignSourcesToIDs idNodes srcAssignments :: (Tree [(Int, Maybe FilePath)], [Maybe FilePath])
   newGenomes <- createAllChildren genomes ticketnodes
   return $ Pool name it max gain (nxt + newGenomesCnt) newGenomes
+
+assignSourcesToIDs :: Tree [a] -> [b] -> (Tree [(a, b)], [b])
+assignSourcesToIDs (Node nodeLst chdren) list = (Node elem' chdren', finalRest)--Node (zip nodeLst (take (length nodeLst) list)) $ foldr (\)
+  where
+    elem' = zip nodeLst (take (length nodeLst) list)
+    rest = drop (length nodeLst) list
+    (finalRest, chdren') = foldr foldInto (rest, []) chdren
+    foldInto child (rest2, newchdr) = let (child', rest3) = assignSourcesToIDs child rest2 in (rest3, child' : newchdr)
 
 --assigns tickets of type a to a Traversable of Ints, one ticket per value in each location.
 assignTickets :: Traversable t => t Int -> [a] -> t [a]
