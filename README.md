@@ -1,7 +1,9 @@
 # GP
 Genetic Programming with a twist: The code generator tries to mutate itself. Haskell-based
 
-Note: The source file "GRPSeedhr.hs" is a properly formatted version of GRPSeed.hs - it is there to read and edit the code, not for reflective processing.
+Notes:
+The source file "GRPSeedhr.hs" is a properly formatted version of GRPSeed.hs - it is there to read and edit the code, not for reflective processing.
+Also, due to the way refill works, having a small pool might lead to a possibly undesirable feedback effect, where a genome is handed it's own code for replication.
 
 Example usage: Compile the executable GP, copy into src folder;
 ./GP --init

@@ -25,6 +25,8 @@ import System.IO.Strict(readFile)
 import System.Process (readProcessWithExitCode)
 import System.Exit (ExitCode(..))
 import System.Directory (removeFile)
+import System.Random.Shuffle (shuffle')
+import System.Random (newStdGen)
 
 import Data.Tree
 import Data.Tree.Zipper
@@ -376,8 +378,10 @@ refillPool (Pool name it max gain nxt genomes) = do
   --let size = length $ filter (\i -> case i of ActiveI _ _ _ -> True; _ -> False) $ flatten genomes
   let newGenomesCnt = gain
   let tickets = [nxt .. nxt + newGenomesCnt - 1]
-  let srcAssignments = repeat Nothing :: [Maybe FilePath]
   let wtNodes = weightedAssign newGenomesCnt (getRefillWeights genomes) :: Tree Int
+  rng <- newStdGen
+  let sortedSrcAssignments = concat $ flatten $ zipTreeWith (\i ind -> replicate i $ path ind) wtNodes genomes :: [Maybe FilePath] --TODO
+  let srcAssignments = shuffle' sortedSrcAssignments (length sortedSrcAssignments) rng
   let idNodes = assignTickets wtNodes tickets :: Tree [Int]
   let (ticketnodes, srcsLeftOver) = assignSourcesToIDs idNodes srcAssignments :: (Tree [(Int, Maybe FilePath)], [Maybe FilePath])
   newGenomes <- createAllChildren genomes ticketnodes
@@ -391,7 +395,7 @@ assignSourcesToIDs (Node nodeLst chdren) list = (Node elem' chdren', finalRest)-
     (finalRest, chdren') = foldr foldInto (rest, []) chdren
     foldInto child (rest2, newchdr) = let (child', rest3) = assignSourcesToIDs child rest2 in (rest3, child' : newchdr)
 
---assigns tickets of type a to a Traversable of Ints, one ticket per value in each location.
+--assigns tickets of type a to a Traversable of values of Ints, one ticket per value in each location.
 assignTickets :: Traversable t => t Int -> [a] -> t [a]
 assignTickets tree tickets =
   let

@@ -27,10 +27,12 @@ module GRPCommon
 , PartitioningProblemOutput
 , lexems
 , pickRandomly
+, pickNRandomly
 ) where
 
 import System.Random
 import Dictionary
+import Data.List
 
 {-
   This file contains some basic functions that are supposed to be used by the code generator
@@ -86,6 +88,14 @@ fourth4 (a,b,c,d) = d
 pickRandomly :: [a] -> StdGen -> (a, StdGen)
 pickRandomly elems rng = (elems !! (ix `mod` length elems), rng2)
   where (ix, rng2) = next rng
+
+pickNRandomly :: Int -> [a] -> StdGen -> ([a], StdGen)
+pickNRandomly 1 lst rng = ([pick], rng')
+  where (pick, rng') = pickRandomly lst rng
+pickNRandomly x lst rng = if x > 0 then ((pick:rest),rng') else ([], rng)
+  where
+    (pick, rng'') = pickRandomly lst rng
+    (rest, rng') = pickNRandomly (x-1) lst rng''
 
 --TODO: Only allow printable chars here? \t, \n, ' ', symbols, digits and characters?
 mkChar = (!!) ['\0'..'\127']
@@ -332,7 +342,7 @@ ppWords = [
   "$",
   "."
   ]
-lexems = ppWords
+lexems = nub (ppWords ++ stuff ++ map fst4 functions ++ map fst3 programAtoms)
 
 ws1 [] = 0
 ws1 ((_,_,x):xs) = x + ws1 xs

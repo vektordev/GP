@@ -36,7 +36,8 @@ executable GP
                        criterion,
                        hint,
                        bytestring,
-                       deepseq
+                       deepseq,
+                       random-shuffle
   hs-source-dirs:      src
   default-language:    Haskell2010
 
@@ -62,6 +63,7 @@ executable Frontend
                        criterion,
                        hint,
                        bytestring,
-                       deepseq
+                       deepseq,
+                       import random-shuffle
   hs-source-dirs:      src
   default-language:    Haskell2010
