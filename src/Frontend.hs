@@ -60,6 +60,7 @@ summaryPrint :: Pool -> [FeatureVec] -> Picture
 summaryPrint p fvs = Scale 0.1 0.1 $ Pictures [
     Translate 0 600 $ Text (show $ rawHistogram $ map isLocalMax fvs),
     Translate 0 450 $ Text (show $ rawHistogram $ map state fvs),
+    Translate 0 750 $ Text (show $ rawHistogram $ map (fst . getFitness) $ flatten $ genomes p),
     Translate 0 300 $ Text ("IDs handed out = " ++ show (nextID p)),
     Translate 0 150 $ Text ("Individuals found: " ++ show (length $ flatten $ genomes p)),
     Text ("Compiling genomes: "++ show (length $ filter (\ind -> getFitness ind >= (UnknownCompilerError, 10^10)) $ flatten $ genomes p))
