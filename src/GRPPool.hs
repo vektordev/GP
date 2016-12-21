@@ -338,7 +338,7 @@ getRefillWeights individuals = fmap (maybe 0 adaptedRegression) $ extractFromTre
 getRegressedFeatures :: Tree Individual -> Tree Float
 getRegressedFeatures individuals = fmap (maybe 0 activeRegression) $ extractFromTreeContext getFeatures individuals
 
-activeRegression = regressFit
+activeRegression (FeatureVec _ _ _ _ _ fit _ crate _ _ _) = fit + fromRational crate
 
 --ignore compilation rate. Thus, we can try to fit to type check problem instead of overfitting ruthlessly.
 regressFit :: FeatureVec -> Float
@@ -453,8 +453,8 @@ createChild loc id srcCode = do
     mkChild ind@(ActiveI parentID fit path) id srcCode = do
       writeFile (path ++ ".hs.stat") $show ind
       (code, out, err) <- readProcessWithExitCode "timeout"
-        ["1s", path ++ "hl", "-e", srcCode ++ ".hs", "GRPGenome" ++ show id ++ ".hs"] ""
-      System.Directory.removeFile (path ++ ".hs.stat") --state would be lost here
+        ["1s", path ++ "hl", "-e", path ++ ".hs", srcCode ++ ".hs", "GRPGenome" ++ show id ++ ".hs"] ""
+      --System.Directory.removeFile (path ++ ".hs.stat") --state would be lost here
       if code == ExitSuccess
         then do
           generate ("GRPGenome" ++ show id ++ ".hs")
@@ -463,7 +463,7 @@ createChild loc id srcCode = do
           then return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
           else if "Non-exhaustive patterns in function" `isInfixOf` err || "head: empty list" `isInfixOf` err
             then return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
-            else trace ("runtime error was: " ++ err ++ "\nOutput was" ++ out) return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
+            else trace ("runtime error was: " ++ err ++ "\nOutput was: " ++ out) return [Node (JunkI id (RuntimeErrOnParent, 0.0)) []]
   newElem <- mkChild (rootLabel $ tree loc) id srcCode -- rootlabel . tree == label ?
   return (modifyTree (\(Node a subnodes) -> Node a (newElem ++ subnodes)) loc)
 

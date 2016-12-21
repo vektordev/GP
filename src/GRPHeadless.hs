@@ -37,7 +37,7 @@ main = do
   args <- getArgs
   putStrLn $ show args
   let statFile = (args !! 1) ++ ".stat"
-  if head args == "-e" then evolve statFile (args !! 1) (args !! 2) else fitnessEval statFile
+  if head args == "-e" then evolve statFile (args !! 2) (args !! 3) else fitnessEval statFile
 
 fitnessEval :: FilePath -> IO()
 fitnessEval statFile = do
