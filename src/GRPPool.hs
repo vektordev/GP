@@ -338,7 +338,7 @@ getRefillWeights individuals = fmap (maybe 0 adaptedRegression) $ extractFromTre
 getRegressedFeatures :: Tree Individual -> Tree Float
 getRegressedFeatures individuals = fmap (maybe 0 activeRegression) $ extractFromTreeContext getFeatures individuals
 
-activeRegression (FeatureVec _ _ _ _ _ fit _ crate _ _ _) = fit + fromRational crate
+activeRegression (FeatureVec _ _ _ _ _ fit _ crate _ _ _) = fit * fromRational crate
 
 --ignore compilation rate. Thus, we can try to fit to type check problem instead of overfitting ruthlessly.
 regressFit :: FeatureVec -> Float
