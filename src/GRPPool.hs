@@ -198,6 +198,7 @@ iteratePool it options p = do
   initializeTime
   putStrLn ("Starting iteration " ++ show (iterations p))
   when (mod it 10 == 1) $ writeFile (getUniqueName p ++ "backup") (show p)
+  putStrLn $ show $ length $ show p
   t0 <- getTime
   rp <- refillPool p
   t1 <- getTime
@@ -338,7 +339,7 @@ getRefillWeights individuals = fmap (maybe 0 adaptedRegression) $ extractFromTre
 getRegressedFeatures :: Tree Individual -> Tree Float
 getRegressedFeatures individuals = fmap (maybe 0 activeRegression) $ extractFromTreeContext getFeatures individuals
 
-activeRegression (FeatureVec _ _ _ _ _ fit _ crate _ _ _) = fit * fromRational crate
+activeRegression (FeatureVec _ _ _ _ _ fit _ crate _ _ _) = fit * fromRational crate + 0.0001
 
 --ignore compilation rate. Thus, we can try to fit to type check problem instead of overfitting ruthlessly.
 regressFit :: FeatureVec -> Float
@@ -413,6 +414,7 @@ createAllChildren :: Tree Individual -> Tree [(Int, Maybe FilePath)] -> IO (Tree
 --recurse on right neighbor. If no right neighbor, return
 createAllChildren iTree tTree = do
   upd <- zipperCreateAll (fromTree iTree)(fromTree tTree)
+  putStrLn ("createAllChildren: Work done" ++ (show $ length $ show upd))
   return $ toTree upd
 
 --needs to iterate over all children off the two treePos.

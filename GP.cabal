@@ -28,7 +28,7 @@ executable GP
                        process,
                        containers,
                        rosezipper,
-                       haskell-src-exts,
+                       haskell-src-exts >= 1.18.2,
                        strict,
                        split,
                        async,
@@ -64,6 +64,6 @@ executable Frontend
                        hint,
                        bytestring,
                        deepseq,
-                       import random-shuffle
+                       random-shuffle
   hs-source-dirs:      src
   default-language:    Haskell2010
