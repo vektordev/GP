@@ -71,13 +71,18 @@ searchWeight low high n weights =
   if high - low < epsilon
   then trace ("Search weight: " ++ show low) low
   else
-    let midCnt = (getTotal ((low+high)/2) weights)
+    let
+      mid = (low+high)/2
+      midCnt = getTotal mid weights
     in if midCnt == n
     then trace ("Search weight: " ++ show ((low+high)/2)) ((low+high)/2)
     else
-      if midCnt > n
-      then searchWeight low ((low+high)/2) n weights
-      else searchWeight ((low+high)/2) high n weights
+      if mid == low || mid == high
+      then trace ("Condition 3 search weigh: " ++ show ((low+high)/2)) ((low+high)/2)
+      else
+        if midCnt > n
+        then searchWeight low ((low+high)/2) n weights
+        else searchWeight ((low+high)/2) high n weights
 
 --getTotal :: (Integral a, RealFrac r) => r -> [r] -> a
 getTotal numPerWeight weights = sum $ fmap
