@@ -16,7 +16,7 @@ fitness :: Input -> Output -> IO Float
 fitness (PPI input) (PPO out) =
   if sort input == sort (fst out ++ snd out) --is it a valid partitioning?
   then return $ - (fromIntegral $ abs ((sum $ fst out) - (sum $ snd out)))
-  else return $ - (fromIntegral $ sum $ map abs input)
+  else return (worstScore (PPI input))
 fitness _ _ = error "wrong input type"
 
 generateInput :: Int -> IO Input
@@ -28,7 +28,9 @@ generateInput n = do
 
 worstScore :: Input -> Float
 worstScore (PPI []) = 0
-worstScore (PPI (i:inp)) = - ((fromIntegral $ abs $ length (i:inp)) * (fromIntegral $ snd $ genRange $ mkStdGen 0))
+--worstScore (PPI (i:inp)) = - ((fromIntegral $ abs $ length (i:inp)) * (fromIntegral $ snd $ genRange $ mkStdGen 0))
+--worstScore (PPI x) = fitness (PPI x) (PPO (x, []))
+worstScore (PPI x) = - (fromIntegral $ sum $ map abs x)
 worstScore _ = error "wrong input type"
 
 bestScore :: Input -> Float
