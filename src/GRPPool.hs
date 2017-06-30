@@ -244,7 +244,8 @@ garbageCollection pool = undefined
 getFormattedFeatureDump :: Pool -> String
 getFormattedFeatureDump (Pool _ _ _ _ _ individuals) = format (iterateTZipper getFeatures $ fromTree individuals)
   where
-    format featureVs = unlines $ map show $ catMaybes featureVs
+    format featureVs = unlines $ map (init . tail . toTuple) $ catMaybes featureVs
+    toTuple = (\ (FeatureVec id parentid state localmax generation fitness fitgain compilationrate rategain children avfchdfit) -> show (id, parentid, state, localmax, generation, fitness, fitgain, fromRational compilationrate, fromRational rategain, children, avfchdfit))
 
 iterateTZipper :: (TreePos Full Individual -> Maybe FeatureVec) -> TreePos Full Individual -> [Maybe FeatureVec]
 iterateTZipper func z = func z : maybe [] (iterateTZipper func) (firstChild z) ++ maybe [] (iterateTZipper func) (next z)
